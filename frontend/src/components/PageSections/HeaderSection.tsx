@@ -8,7 +8,7 @@ import HamburgerMenu from '../ui/HamburgerMenu';
 import { SmartVideo } from '../Videos/SmartVideo';
 
 interface HeaderProps {
-    logoUrl: string;
+    logoUrl?: string;
     videoAsset: VideoAsset;
     mainHeading: string;
     description: string;
