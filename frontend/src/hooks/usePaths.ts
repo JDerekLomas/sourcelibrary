@@ -33,5 +33,6 @@ export const usePaths = () => {
     phaserGame: PATHS.PHASER_GAME(tenantSlug),
 
     translation: (bookId:string, pageId:string) => PATHS.TRANSLATION(tenantSlug, bookId, pageId),
+    translator: (bookId:string, pageId:string) => PATHS.TRANSLATOR(tenantSlug, bookId, pageId),
   };
 };

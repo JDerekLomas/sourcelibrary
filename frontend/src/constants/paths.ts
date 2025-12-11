@@ -46,6 +46,12 @@ export const PATHS = {
   TRANSLATION: (tenant: string, bookId: string, pageId: string) => {
     return `/${tenant}/${ROUTE_SEGMENTS.TRANSLATION.
       replace(":book_id", bookId).
-      replace(":page_id", pageId)}`;        
+      replace(":page_id", pageId)}`;
+  },
+
+  TRANSLATOR: (tenant: string, bookId: string, pageId: string) => {
+    return `/${tenant}/${ROUTE_SEGMENTS.TRANSLATOR.
+      replace(":book_id", bookId).
+      replace(":page_id", pageId)}`;
   }
 };

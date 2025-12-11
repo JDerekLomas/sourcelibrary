@@ -9,6 +9,7 @@ import BookDetails from "./pages/BookDetails";
 import AddBook from "./pages/AddBook";
 import EditBook from "./pages/EditBook";
 import OCRTranslation from "./pages/OCRTranslation";
+import BookTranslator from "./pages/BookTranslator";
 import Discover from "./pages/Discover";
 import AdminHomePage from "./pages/admin/dashboard";
 import RequestsPage from "./pages/admin/request";
@@ -41,6 +42,7 @@ export const TenantScopedRoutes = () => {
                 <Route path={ROUTE_SEGMENTS.DISCOVER} element={<Discover />} />
                 <Route path={ROUTE_SEGMENTS.BOOK_DETAILS} element={<BookDetails />} />
                 <Route path={ROUTE_SEGMENTS.TRANSLATION} element={<OCRTranslation />} />
+                <Route path={ROUTE_SEGMENTS.TRANSLATOR} element={<BookTranslator />} />
 
                 {/* Admin Routes */}
                 <Route element={<ProtectedRoutes allowedPermissions={{ [ResourceType.USER]: [ActionType.CREATE, ActionType.UPDATE, ActionType.DELETE] }} />}>

@@ -26,4 +26,5 @@ export const ROUTE_SEGMENTS = {
   PHASER_GAME: "jsgame",
 
   TRANSLATION: "translation/:book_id/:page_id",
+  TRANSLATOR: "translator/:book_id/:page_id",
 };
