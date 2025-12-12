@@ -14,6 +14,7 @@ import {
 import { ClipboardIcon as ClipboardIconSolid } from "@heroicons/react/24/solid";
 import { PageDetails, Book } from "../types";
 import { apiService } from "../services/api";
+import { samplePages, sampleBook } from "../data/samplePages";
 import { MAJOR_LANGUAGES } from "../utils/languages";
 import AIModelSelect from "../components/AiModels/AIModelSelect";
 import { OCR_MODELS } from "../components/AiModels/aiModels";
@@ -59,10 +60,23 @@ const BookTranslator: React.FC = () => {
   );
   const [tempOcrPrompt, setTempOcrPrompt] = useState("");
 
+  // Check if this is demo mode
+  const isDemo = book_id === "demo" || book_id?.startsWith("demo-");
+
   // Load book and pages
   useEffect(() => {
     if (!book_id) return;
 
+    // Demo mode - use sample data
+    if (isDemo) {
+      setBook(sampleBook as Book);
+      setAllPages(samplePages);
+      const index = samplePages.findIndex((page) => page.id === page_id);
+      setCurrentPageIndex(index >= 0 ? index : 0);
+      return;
+    }
+
+    // Real API mode
     apiService
       .getBook(book_id)
       .then((data) => setBook(data))
@@ -79,12 +93,21 @@ const BookTranslator: React.FC = () => {
         setCurrentPageIndex(index >= 0 ? index : 0);
       })
       .catch((error) => console.error("Error fetching book details:", error));
-  }, [book_id, page_id]);
+  }, [book_id, page_id, isDemo]);
 
   // Load page details
   useEffect(() => {
     if (!page_id) return;
 
+    // Demo mode - use sample data
+    if (isDemo) {
+      const demoPage = samplePages.find((p) => p.id === page_id) || samplePages[0];
+      setPageDetails(demoPage);
+      setImageLoading(false);
+      return;
+    }
+
+    // Real API mode
     setPageDetails(null);
     setImageLoading(true);
 
@@ -92,7 +115,7 @@ const BookTranslator: React.FC = () => {
       .getPage(page_id)
       .then((data) => setPageDetails(data))
       .catch((error) => console.error("Error fetching page details:", error));
-  }, [page_id]);
+  }, [page_id, isDemo]);
 
   // Initialize language defaults from book
   useEffect(() => {
@@ -147,6 +170,14 @@ const BookTranslator: React.FC = () => {
 
     setOcrApiRunning(true);
 
+    // Demo mode - simulate OCR with delay
+    if (isDemo) {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      showSuccess("Demo: OCR simulation complete");
+      setOcrApiRunning(false);
+      return;
+    }
+
     try {
       const promptWithLanguage = customOcrPrompt.replace(
         "{language}",
@@ -185,6 +216,14 @@ const BookTranslator: React.FC = () => {
     if (!pageDetails?.ocr.data) return;
 
     setTranslationApiRunning(true);
+
+    // Demo mode - simulate translation with delay
+    if (isDemo) {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      showSuccess("Demo: Translation simulation complete");
+      setTranslationApiRunning(false);
+      return;
+    }
 
     try {
       const response = await apiService.performTranslation({
