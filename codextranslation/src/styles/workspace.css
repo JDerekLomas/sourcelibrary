@@ -1,0 +1,56 @@
+.workspace-grid {
+  display: grid;
+  grid-template-areas:
+    'header header header'
+    'left-sidebar main right-sidebar'
+    'footer footer footer';
+  grid-template-columns: 250px 1fr 300px;
+  grid-template-rows: auto 1fr auto;
+  height: 100vh;
+  gap: 1rem;
+  padding: 1rem;
+  background-color: #f0f2f5;
+  color: #333;
+}
+
+.workspace-header {
+  grid-area: header;
+  background-color: #fff;
+  padding: 1rem;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+}
+
+.workspace-main {
+  grid-area: main;
+  background-color: #fff;
+  padding: 1rem;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+  overflow-y: auto;
+}
+
+.workspace-left-sidebar,
+.workspace-right-sidebar {
+  padding: 1rem;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+  overflow-y: auto;
+}
+
+.workspace-left-sidebar {
+  grid-area: left-sidebar;
+}
+
+.workspace-right-sidebar {
+  grid-area: right-sidebar;
+}
+
+.workspace-footer {
+  grid-area: footer;
+  text-align: center;
+  padding: 0.5rem;
+  font-size: 0.875rem;
+  color: #666;
+}

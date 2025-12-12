@@ -1,33 +1,46 @@
-# One Time Setup (Mac)
+# Local Development
 
-### Backend Setup
-1. Open Terminal.
-2. Create virtual environment: `python3 -m venv .venv`
-3. Activate the virtual environment: `source .venv/bin/activate`
-4. On successful activation, `(.venv)` would appear on the left of the terminal command line.
-   - (Optional) Further verify succesful activation:
-     - Type command: `which python`
-     - It should show the path of python in the newly created `.venv` directory.
-     - Example Output: `<Path>/<Of>/<Your>/<Project>/.venv/bin/python`
-5. Install packages: `pip install -r ./backend/requirements.txt`
+This project uses a FastAPI backend (`backend/src/main.py`) and a Vite + React frontend (`frontend`). The repo now includes helper scripts so you can bootstrap a clean laptop in a couple of commands.
 
-### Frontend Setup
-1. Open new Terminal.
-2. Go to the _frontend_ directory: `cd frontend`
-3. Install packages: `npm install`
+## Quick Start
 
----
-# Running Server + Website Locally
+```bash
+# install Python + Node dependencies (creates .venv automatically)
+./scripts/setup_local.sh
+
+# terminal 1 – start the API
+./scripts/run_backend.sh
+
+# terminal 2 – start the frontend dev server
+./scripts/run_frontend.sh
+```
+
+- API: http://localhost:8080  
+- Website: http://localhost:5173/root  
+- Default login: `root` / `admin@5678`
+
+> The backend reads configuration from `backend/.env`. If you don't want to use the committed secrets, copy `backend/.env.example` to `backend/.env` and fill in your own keys before starting the server.
+
+Need more step-by-step context? See `docs/local_run_notes.md`.
+
+## Manual Setup (if you prefer)
+
+### Backend (Python 3.11+)
+1. `python3 -m venv .venv`
+2. `source .venv/bin/activate`
+3. `pip install -r backend/requirements.txt`
+4. `cp backend/.env.example backend/.env` and update the values (only needed once)
+
+### Frontend (Node 18+)
+1. `cd frontend`
+2. `npm install`
+
+## Running Without Scripts
 
 ### Backend
-1. Open Terminal.
-2. Activate the virtual environment: `source .venv/bin/activate`
-3. Start server: `python backend/src/main.py`
+1. `source .venv/bin/activate`
+2. `python backend/src/main.py`
 
 ### Frontend
-1. Go to the _frontend_ directory: `cd frontend`
-2. Run command: `npm run dev`
-
----
-##### Website URL: http://localhost:5173/root
-**User Name:** `root` | **Password:** `admin@5678`
+1. `cd frontend`
+2. `npm run dev -- --host`

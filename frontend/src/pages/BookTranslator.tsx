@@ -19,7 +19,7 @@ import { ClipboardIcon as ClipboardIconSolid } from "@heroicons/react/24/solid";
 import { PageDetails, Book } from "../types";
 import { apiService } from "../services/api";
 import { samplePages, sampleBook } from "../data/samplePages";
-import { MAJOR_LANGUAGES, TRANSLATION_LANGUAGES } from "../utils/languages";
+// Languages no longer needed in settings - using currentPromptText directly
 import { OCR_MODELS, TRANSLATION_MODELS } from "../components/AiModels/aiModels";
 import Modal from "../components/ui/Modal";
 import Toast from "../components/ui/Toast";
@@ -90,7 +90,16 @@ const BookTranslator: React.FC = () => {
   const [selectedOcrPromptId, setSelectedOcrPromptId] = useState("1");
   const [selectedTranslationPromptId, setSelectedTranslationPromptId] = useState("1");
   const [newPromptName, setNewPromptName] = useState("");
-  const [newPromptText, setNewPromptText] = useState("");
+
+  // Current prompt text being edited in modal
+  const [currentOcrPromptText, setCurrentOcrPromptText] = useState(() => {
+    const prompt = DEFAULT_OCR_PROMPTS.find((p) => p.id === "1");
+    return prompt?.prompt || "";
+  });
+  const [currentTranslationPromptText, setCurrentTranslationPromptText] = useState(() => {
+    const prompt = DEFAULT_TRANSLATION_PROMPTS.find((p) => p.id === "1");
+    return prompt?.prompt || "";
+  });
 
   // Check if this is demo mode
   const isDemo = book_id === "demo" || book_id?.startsWith("demo-");
@@ -201,18 +210,7 @@ const BookTranslator: React.FC = () => {
     }
   }, [currentPageIndex, allPages, book_id, navigate]);
 
-  // Get selected prompts
-  const getSelectedOcrPrompt = () => {
-    const prompt = ocrPrompts.find((p) => p.id === selectedOcrPromptId);
-    return prompt?.prompt || ocrPrompts[0]?.prompt || "";
-  };
-
-  const getSelectedTranslationPrompt = () => {
-    const prompt = translationPrompts.find((p) => p.id === selectedTranslationPromptId);
-    return prompt?.prompt || translationPrompts[0]?.prompt || "";
-  };
-
-  // OCR handler
+  // OCR handler - uses currentOcrPromptText directly
   const runOCR = async () => {
     if (!pageDetails) return;
 
@@ -226,8 +224,8 @@ const BookTranslator: React.FC = () => {
     }
 
     try {
-      const promptTemplate = getSelectedOcrPrompt();
-      const promptWithLanguage = promptTemplate.replace("{language}", pageDetails.ocr.language);
+      // Use the current prompt text, replacing placeholders
+      const promptWithLanguage = currentOcrPromptText.replace("{language}", pageDetails.ocr.language);
 
       const response = await apiService.performOCR({
         pageId: pageDetails.id,
@@ -250,7 +248,7 @@ const BookTranslator: React.FC = () => {
     }
   };
 
-  // Translation handler
+  // Translation handler - uses currentTranslationPromptText directly
   const runTranslation = async () => {
     if (!pageDetails?.ocr.data) return;
 
@@ -264,8 +262,8 @@ const BookTranslator: React.FC = () => {
     }
 
     try {
-      const promptTemplate = getSelectedTranslationPrompt();
-      const prompt = promptTemplate
+      // Use the current prompt text, replacing placeholders
+      const prompt = currentTranslationPromptText
         .replace("{source_lang}", pageDetails.ocr.language)
         .replace("{target_lang}", pageDetails.translation.language || "English");
 
@@ -328,43 +326,79 @@ const BookTranslator: React.FC = () => {
   };
 
   // Prompt management
+  const handleSelectOcrPrompt = (id: string) => {
+    setSelectedOcrPromptId(id);
+    const prompt = ocrPrompts.find((p) => p.id === id);
+    if (prompt) {
+      setCurrentOcrPromptText(prompt.prompt);
+    }
+  };
+
+  const handleSelectTranslationPrompt = (id: string) => {
+    setSelectedTranslationPromptId(id);
+    const prompt = translationPrompts.find((p) => p.id === id);
+    if (prompt) {
+      setCurrentTranslationPromptText(prompt.prompt);
+    }
+  };
+
   const addOcrPrompt = () => {
-    if (!newPromptName.trim() || !newPromptText.trim()) return;
+    if (!newPromptName.trim()) return;
+    const defaultPrompt = "OCR the page in {language}. Return the transcribed text.";
     const newPrompt: PromptItem = {
       id: Date.now().toString(),
       name: newPromptName,
-      prompt: newPromptText,
+      prompt: defaultPrompt,
     };
     setOcrPrompts([...ocrPrompts, newPrompt]);
+    setSelectedOcrPromptId(newPrompt.id);
+    setCurrentOcrPromptText(defaultPrompt);
     setNewPromptName("");
-    setNewPromptText("");
   };
 
   const addTranslationPrompt = () => {
-    if (!newPromptName.trim() || !newPromptText.trim()) return;
+    if (!newPromptName.trim()) return;
+    const defaultPrompt = "Translate from {source_lang} to {target_lang}.";
     const newPrompt: PromptItem = {
       id: Date.now().toString(),
       name: newPromptName,
-      prompt: newPromptText,
+      prompt: defaultPrompt,
     };
     setTranslationPrompts([...translationPrompts, newPrompt]);
+    setSelectedTranslationPromptId(newPrompt.id);
+    setCurrentTranslationPromptText(defaultPrompt);
     setNewPromptName("");
-    setNewPromptText("");
+  };
+
+  const updateOcrPrompt = (id: string, newPromptText: string) => {
+    setOcrPrompts(ocrPrompts.map((p) =>
+      p.id === id ? { ...p, prompt: newPromptText } : p
+    ));
+  };
+
+  const updateTranslationPrompt = (id: string, newPromptText: string) => {
+    setTranslationPrompts(translationPrompts.map((p) =>
+      p.id === id ? { ...p, prompt: newPromptText } : p
+    ));
   };
 
   const deleteOcrPrompt = (id: string) => {
     if (ocrPrompts.length <= 1) return;
-    setOcrPrompts(ocrPrompts.filter((p) => p.id !== id));
+    const remaining = ocrPrompts.filter((p) => p.id !== id);
+    setOcrPrompts(remaining);
     if (selectedOcrPromptId === id) {
-      setSelectedOcrPromptId(ocrPrompts[0].id);
+      setSelectedOcrPromptId(remaining[0].id);
+      setCurrentOcrPromptText(remaining[0].prompt);
     }
   };
 
   const deleteTranslationPrompt = (id: string) => {
     if (translationPrompts.length <= 1) return;
-    setTranslationPrompts(translationPrompts.filter((p) => p.id !== id));
+    const remaining = translationPrompts.filter((p) => p.id !== id);
+    setTranslationPrompts(remaining);
     if (selectedTranslationPromptId === id) {
-      setSelectedTranslationPromptId(translationPrompts[0].id);
+      setSelectedTranslationPromptId(remaining[0].id);
+      setCurrentTranslationPromptText(remaining[0].prompt);
     }
   };
 
@@ -433,13 +467,13 @@ const BookTranslator: React.FC = () => {
     onSelectPrompt,
     onAddPrompt,
     onDeletePrompt,
-    language,
-    onLanguageChange,
-    languages,
+    onUpdatePrompt,
     model,
     onModelChange,
     models,
     type,
+    currentPromptText,
+    onPromptTextChange,
   }: {
     isOpen: boolean;
     onClose: () => void;
@@ -449,19 +483,21 @@ const BookTranslator: React.FC = () => {
     onSelectPrompt: (id: string) => void;
     onAddPrompt: () => void;
     onDeletePrompt: (id: string) => void;
-    language: string;
-    onLanguageChange: (lang: string) => void;
-    languages: { value: string; label: string }[];
+    onUpdatePrompt: (id: string, prompt: string) => void;
     model: string;
     onModelChange: (model: string) => void;
     models: { value: string; label: string }[];
     type: "ocr" | "translation";
+    currentPromptText: string;
+    onPromptTextChange: (text: string) => void;
   }) => {
     if (!isOpen) return null;
 
+    const selectedPrompt = prompts.find((p) => p.id === selectedPromptId);
+
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-gray-200">
             <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
@@ -474,106 +510,101 @@ const BookTranslator: React.FC = () => {
           </div>
 
           {/* Content */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-6">
-            {/* Language & Model */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {type === "ocr" ? "Source Language" : "Target Language"}
-                </label>
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {/* Model Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                AI Model
+              </label>
+              <select
+                value={model}
+                onChange={(e) => onModelChange(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+              >
+                {models.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Prompt Selection Dropdown */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Prompt Template
+              </label>
+              <div className="flex gap-2">
                 <select
-                  value={language}
-                  onChange={(e) => onLanguageChange(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  value={selectedPromptId}
+                  onChange={(e) => onSelectPrompt(e.target.value)}
+                  className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                 >
-                  {languages.map((lang) => (
-                    <option key={lang.value} value={lang.value}>
-                      {lang.label || lang.value}
+                  {prompts.map((prompt) => (
+                    <option key={prompt.id} value={prompt.id}>
+                      {prompt.name}
                     </option>
                   ))}
                 </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  AI Model
-                </label>
-                <select
-                  value={model}
-                  onChange={(e) => onModelChange(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                >
-                  {models.map((m) => (
-                    <option key={m.value} value={m.value}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
+                {prompts.length > 1 && (
+                  <button
+                    onClick={() => onDeletePrompt(selectedPromptId)}
+                    className="px-3 py-2 border border-red-300 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    title="Delete this prompt"
+                  >
+                    <TrashIcon className="h-4 w-4" />
+                  </button>
+                )}
               </div>
             </div>
 
-            {/* Prompt Library */}
+            {/* Prompt Text Editor */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Prompt Library
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Prompt Text
+                <span className="text-xs text-gray-500 ml-2">
+                  (use {type === "ocr" ? "{language}" : "{source_lang}, {target_lang}"} as placeholders)
+                </span>
               </label>
-              <div className="space-y-2">
-                {prompts.map((prompt) => (
-                  <div
-                    key={prompt.id}
-                    className={`flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-all ${
-                      selectedPromptId === prompt.id
-                        ? "border-purple-500 bg-purple-50"
-                        : "border-gray-200 hover:border-gray-300"
-                    }`}
-                    onClick={() => onSelectPrompt(prompt.id)}
-                  >
-                    <div className="flex-1">
-                      <div className="font-medium text-sm text-gray-900">{prompt.name}</div>
-                      <div className="text-xs text-gray-500 truncate">{prompt.prompt}</div>
-                    </div>
-                    {prompts.length > 1 && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDeletePrompt(prompt.id);
-                        }}
-                        className="p-1 hover:bg-red-100 rounded text-red-500"
-                      >
-                        <TrashIcon className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                ))}
+              <textarea
+                value={currentPromptText}
+                onChange={(e) => onPromptTextChange(e.target.value)}
+                rows={8}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 font-mono"
+              />
+              <div className="flex justify-end mt-2">
+                <button
+                  onClick={() => onUpdatePrompt(selectedPromptId, currentPromptText)}
+                  disabled={currentPromptText === selectedPrompt?.prompt}
+                  className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 disabled:opacity-50 disabled:cursor-not-allowed text-purple-700 rounded-lg text-sm font-medium transition-colors"
+                >
+                  Save Changes
+                </button>
               </div>
             </div>
 
             {/* Add New Prompt */}
             <div className="border-t border-gray-200 pt-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Add New Prompt
+                Create New Prompt
               </label>
-              <input
-                type="text"
-                placeholder="Prompt name"
-                value={newPromptName}
-                onChange={(e) => setNewPromptName(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-              />
-              <textarea
-                placeholder={`Prompt text (use {language}${type === "translation" ? ", {source_lang}, {target_lang}" : ""} as placeholders)`}
-                value={newPromptText}
-                onChange={(e) => setNewPromptText(e.target.value)}
-                rows={3}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-              />
-              <button
-                onClick={onAddPrompt}
-                disabled={!newPromptName.trim() || !newPromptText.trim()}
-                className="flex items-center gap-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors"
-              >
-                <PlusIcon className="h-4 w-4" />
-                Add Prompt
-              </button>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="New prompt name..."
+                  value={newPromptName}
+                  onChange={(e) => setNewPromptName(e.target.value)}
+                  className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                />
+                <button
+                  onClick={onAddPrompt}
+                  disabled={!newPromptName.trim()}
+                  className="flex items-center gap-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors"
+                >
+                  <PlusIcon className="h-4 w-4" />
+                  Add
+                </button>
+              </div>
             </div>
           </div>
 
@@ -843,20 +874,18 @@ const BookTranslator: React.FC = () => {
         title="OCR Settings"
         prompts={ocrPrompts}
         selectedPromptId={selectedOcrPromptId}
-        onSelectPrompt={setSelectedOcrPromptId}
+        onSelectPrompt={handleSelectOcrPrompt}
         onAddPrompt={addOcrPrompt}
         onDeletePrompt={deleteOcrPrompt}
-        language={pageDetails?.ocr.language || book?.language || "German"}
-        onLanguageChange={(lang) =>
-          handlePageDetailsChange({ ocr: { ...pageDetails!.ocr, language: lang } })
-        }
-        languages={MAJOR_LANGUAGES}
+        onUpdatePrompt={updateOcrPrompt}
         model={pageDetails?.ocr.model || "mistral"}
         onModelChange={(model) =>
           handlePageDetailsChange({ ocr: { ...pageDetails!.ocr, model } })
         }
         models={OCR_MODELS}
         type="ocr"
+        currentPromptText={currentOcrPromptText}
+        onPromptTextChange={setCurrentOcrPromptText}
       />
 
       <SettingsModal
@@ -865,20 +894,18 @@ const BookTranslator: React.FC = () => {
         title="Translation Settings"
         prompts={translationPrompts}
         selectedPromptId={selectedTranslationPromptId}
-        onSelectPrompt={setSelectedTranslationPromptId}
+        onSelectPrompt={handleSelectTranslationPrompt}
         onAddPrompt={addTranslationPrompt}
         onDeletePrompt={deleteTranslationPrompt}
-        language={pageDetails?.translation.language || "English"}
-        onLanguageChange={(lang) =>
-          handlePageDetailsChange({ translation: { ...pageDetails!.translation, language: lang } })
-        }
-        languages={TRANSLATION_LANGUAGES}
+        onUpdatePrompt={updateTranslationPrompt}
         model={pageDetails?.translation.model || "gemini"}
         onModelChange={(model) =>
           handlePageDetailsChange({ translation: { ...pageDetails!.translation, model } })
         }
         models={TRANSLATION_MODELS}
         type="translation"
+        currentPromptText={currentTranslationPromptText}
+        onPromptTextChange={setCurrentTranslationPromptText}
       />
 
       <Modal
