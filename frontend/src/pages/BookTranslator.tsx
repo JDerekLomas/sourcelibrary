@@ -23,7 +23,7 @@ import Modal from "../components/ui/Modal";
 import Toast from "../components/ui/Toast";
 import { useModal } from "../hooks/useModal";
 import { useToast } from "../hooks/useToast";
-import { usePaths } from "../hooks/usePaths";
+// Simple paths without tenant
 
 const BookTranslator: React.FC = () => {
   const { book_id, page_id } = useParams<{
@@ -32,7 +32,6 @@ const BookTranslator: React.FC = () => {
   }>();
 
   const navigate = useNavigate();
-  const paths = usePaths();
 
   const { modalState, hideModal, showError: showModalError } = useModal();
   const { toast, hideToast, showSuccess } = useToast();
@@ -128,19 +127,19 @@ const BookTranslator: React.FC = () => {
     if (currentPageIndex > 0 && book_id) {
       const previousPage = allPages[currentPageIndex - 1];
       if (previousPage?.id) {
-        navigate(paths.translator(book_id, previousPage.id));
+        navigate(`/translator/${book_id}/${previousPage.id}`);
       }
     }
-  }, [currentPageIndex, allPages, book_id, navigate, paths]);
+  }, [currentPageIndex, allPages, book_id, navigate]);
 
   const goToNextPage = useCallback(() => {
     if (currentPageIndex < allPages.length - 1 && book_id) {
       const nextPage = allPages[currentPageIndex + 1];
       if (nextPage?.id) {
-        navigate(paths.translator(book_id, nextPage.id));
+        navigate(`/translator/${book_id}/${nextPage.id}`);
       }
     }
-  }, [currentPageIndex, allPages, book_id, navigate, paths]);
+  }, [currentPageIndex, allPages, book_id, navigate]);
 
   // OCR handler
   const runOCR = async () => {
@@ -268,7 +267,7 @@ const BookTranslator: React.FC = () => {
       <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => book_id && navigate(paths.bookDetails(book_id))}
+            onClick={() => book_id && navigate(`/book/${book_id}`)}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
             title="Back to book"
           >

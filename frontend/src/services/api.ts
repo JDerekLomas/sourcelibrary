@@ -36,7 +36,7 @@ class ApiService {
     baseURL: API_URL,
     withCredentials: true,
     headers: {
-      'X-Tenant-Slug': window.location.pathname.split('/').filter(Boolean)[0] || '', // Initialise tenant slug from URL
+      'X-Tenant-Slug': 'root', // Default tenant for simplified routing
     },
   });
 
