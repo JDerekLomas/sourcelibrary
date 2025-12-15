@@ -118,6 +118,97 @@ class ApiService {
     return `${API_URL.replace(/\/$/, '')}/pdf-create/?url=${encodeURIComponent(imageUrl)}`;
   }
 
+  // PDF Processing operations
+  async processPdfWithSplitting(params: {
+    bookId: string;
+    pdfFile: File;
+    enableSpreadDetection?: boolean;
+    splitConfidenceThreshold?: number;
+    previewCount?: number;
+    processAll?: boolean;
+    ocrLanguage?: string;
+    translationLanguage?: string;
+  }): Promise<{
+    success: boolean;
+    total_pdf_pages: number;
+    processed_pdf_pages: number;
+    created_pages: number;
+    page_ids: string[];
+    remaining_pdf_pages: number;
+    errors: string[];
+  }> {
+    const {
+      bookId,
+      pdfFile,
+      enableSpreadDetection = true,
+      splitConfidenceThreshold = 0.7,
+      previewCount = 10,
+      processAll = false,
+      ocrLanguage = '',
+      translationLanguage = 'English',
+    } = params;
+
+    const formData = new FormData();
+    formData.append('book_id', bookId);
+    formData.append('pdf_file', pdfFile);
+    formData.append('enable_spread_detection', String(enableSpreadDetection));
+    formData.append('split_confidence_threshold', String(splitConfidenceThreshold));
+    formData.append('preview_count', String(previewCount));
+    formData.append('process_all', String(processAll));
+    if (ocrLanguage) {
+      formData.append('ocr_language', ocrLanguage);
+    }
+    formData.append('translation_language', translationLanguage);
+
+    const response = await this.axiosInstance.post('/pdf/process', formData);
+    return this.handleResponse(response);
+  }
+
+  async processRemainingPdf(params: {
+    bookId: string;
+    pdfFile: File;
+    startPdfPage: number;
+    startPageNumber: number;
+    enableSpreadDetection?: boolean;
+    splitConfidenceThreshold?: number;
+    ocrLanguage?: string;
+    translationLanguage?: string;
+  }): Promise<{
+    success: boolean;
+    total_pdf_pages: number;
+    processed_pdf_pages: number;
+    created_pages: number;
+    page_ids: string[];
+    remaining_pdf_pages: number;
+    errors: string[];
+  }> {
+    const {
+      bookId,
+      pdfFile,
+      startPdfPage,
+      startPageNumber,
+      enableSpreadDetection = true,
+      splitConfidenceThreshold = 0.7,
+      ocrLanguage = '',
+      translationLanguage = 'English',
+    } = params;
+
+    const formData = new FormData();
+    formData.append('book_id', bookId);
+    formData.append('pdf_file', pdfFile);
+    formData.append('start_pdf_page', String(startPdfPage));
+    formData.append('start_page_number', String(startPageNumber));
+    formData.append('enable_spread_detection', String(enableSpreadDetection));
+    formData.append('split_confidence_threshold', String(splitConfidenceThreshold));
+    if (ocrLanguage) {
+      formData.append('ocr_language', ocrLanguage);
+    }
+    formData.append('translation_language', translationLanguage);
+
+    const response = await this.axiosInstance.post('/pdf/process-remaining', formData);
+    return this.handleResponse(response);
+  }
+
   // Tenant Operations
   tenantEndpoint = '/tenant';
 

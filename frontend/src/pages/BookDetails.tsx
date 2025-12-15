@@ -18,6 +18,7 @@ import {
 import PageCard from "../components/PageCard";
 import BatchProcessingModal from "../components/BatchProcessingModal";
 import PdfProcessor from "../components/PdfProcessor";
+import PdfSplitProcessor from "../components/PdfSplitProcessor";
 import CryptoJS from "crypto-js";
 import { Book, Page, Category } from "../types";
 import { apiService } from "../services/api";
@@ -64,6 +65,7 @@ const BookDetails: React.FC = () => {
 
   const [pdfGenerating, setPdfGenerating] = useState(false);
   const [pdfProcessorVisible, setPdfProcessorVisible] = useState(false);
+  const [pdfSplitProcessorVisible, setPdfSplitProcessorVisible] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [scrollY, setScrollY] = useState(0);
   const titleRef = useRef<HTMLHeadingElement | null>(null);
@@ -448,6 +450,16 @@ const BookDetails: React.FC = () => {
     await refreshPages();
   };
 
+  const handlePdfSplitSuccess = async (createdPages: number) => {
+    setPdfSplitProcessorVisible(false);
+    showSuccess("PDF Processed", `Successfully created ${createdPages} pages from PDF.`);
+    await refreshPages();
+  };
+
+  const handlePdfSplitError = (error: string) => {
+    showError("PDF Processing Failed", error);
+  };
+
   const refreshPages = async () => {
     if (!book_id) return;
 
@@ -669,7 +681,17 @@ const BookDetails: React.FC = () => {
                             className="bg-white/10 backdrop-blur-sm border-white/20 text-white hover:bg-white/20"
                           >
                             <DocumentIcon className="h-4 w-4 mr-2" />
-                            <span>Upload Pages (PDF)</span>
+                            <span>Upload PDF</span>
+                          </Button>
+
+                          {/* Upload PDF with Spread Detection */}
+                          <Button
+                            onClick={() => setPdfSplitProcessorVisible(true)}
+                            variant="secondary"
+                            className="bg-white/10 backdrop-blur-sm border-white/20 text-white hover:bg-white/20"
+                          >
+                            <BookOpenIcon className="h-4 w-4 mr-2" />
+                            <span>Upload PDF (Split Spreads)</span>
                           </Button>
                         </RoleGuard>
 
@@ -724,7 +746,15 @@ const BookDetails: React.FC = () => {
                           className="bg-white/10 backdrop-blur-sm border-white/20 text-white hover:bg-white/20"
                         >
                           <DocumentIcon className="h-4 w-4 mr-2" />
-                          <span>Upload Pages (PDF)</span>
+                          <span>Upload PDF</span>
+                        </Button>
+                        <Button
+                          onClick={() => setPdfSplitProcessorVisible(true)}
+                          variant="secondary"
+                          className="bg-white/10 backdrop-blur-sm border-white/20 text-white hover:bg-white/20"
+                        >
+                          <BookOpenIcon className="h-4 w-4 mr-2" />
+                          <span>Upload PDF (Split Spreads)</span>
                         </Button>
                       </RoleGuard>
                       <RoleGuard resource={ResourceType.BOOK} action={ActionType.DELETE}>
@@ -1017,6 +1047,20 @@ const BookDetails: React.FC = () => {
             onSuccess={handlePdfSuccess}
             onError={handlePdfError}
             onClose={() => setPdfProcessorVisible(false)}
+          />
+        )
+      }
+
+      {/* PDF Split Processor Modal */}
+      {
+        pdfSplitProcessorVisible && (
+          <PdfSplitProcessor
+            bookId={book_id!}
+            bookLanguage={bookDetails?.language}
+            existingPages={allPages}
+            onSuccess={handlePdfSplitSuccess}
+            onError={handlePdfSplitError}
+            onClose={() => setPdfSplitProcessorVisible(false)}
           />
         )
       }

@@ -5,7 +5,8 @@ import ssl
 import certifi
 from google import genai
 from google.genai.types import UploadFileConfig
-from typing import Optional, Any, Tuple, List
+from google.genai import types
+from typing import Optional, Any, Tuple, List, Dict
 import random
 from contextlib import asynccontextmanager
 
@@ -236,14 +237,135 @@ class GeminiClient(AiClientInterface):
 
     async def process_translation_async(self, prompt: str) -> str:
         """Process translation asynchronously"""
-        try:            
-            result = await self._generate_content_async(prompt)            
-            translation_text = str(result.text)            
-            
+        try:
+            result = await self._generate_content_async(prompt)
+            translation_text = str(result.text)
+
             return translation_text
-            
-        except Exception as e:            
+
+        except Exception as e:
             raise Exception(f"Translation processing failed: {str(e)}")
+
+    async def detect_spread_async(
+        self,
+        image_data: bytes,
+        mime_type: str = "image/jpeg"
+    ) -> Dict[str, Any]:
+        """
+        Detect if image contains a two-page spread and return bounding boxes.
+
+        Args:
+            image_data: Image bytes
+            mime_type: MIME type of the image
+
+        Returns:
+            {
+                "is_spread": bool,
+                "left_page": {"xmin": float, "ymin": float, "xmax": float, "ymax": float} | None,
+                "right_page": {"xmin": float, "ymin": float, "xmax": float, "ymax": float} | None,
+                "confidence": float
+            }
+        """
+        try:
+            from io import BytesIO
+            import json
+
+            image_buffer = BytesIO(image_data)
+
+            # Upload file to Gemini
+            sample_file = await asyncio.to_thread(
+                self.client.files.upload,
+                file=image_buffer,
+                config=UploadFileConfig(
+                    mime_type=mime_type,
+                )
+            )
+
+            try:
+                # Get file reference
+                file = None
+                if sample_file and sample_file.name:
+                    file = await asyncio.to_thread(self.client.files.get, name=sample_file.name)
+
+                prompt = """Analyze this image of a scanned book. Determine if it shows:
+1. A two-page spread (open book showing left and right pages side by side)
+2. A single page
+
+If it's a two-page spread, identify the precise bounding box for each page.
+Exclude any background, table surface, scanner artifacts, or shadows.
+Focus only on the actual paper content of each page.
+
+Return coordinates as percentages (0-100) of image dimensions where:
+- xmin is the left edge
+- xmax is the right edge
+- ymin is the top edge
+- ymax is the bottom edge
+
+Respond ONLY with valid JSON in this exact format (no markdown, no explanation):
+{"is_spread": true, "left_page": {"xmin": 0, "ymin": 0, "xmax": 50, "ymax": 100}, "right_page": {"xmin": 50, "ymin": 0, "xmax": 100, "ymax": 100}, "confidence": 0.95}
+
+If it's a single page, respond with:
+{"is_spread": false, "left_page": null, "right_page": null, "confidence": 0.95}"""
+
+                # Generate content with JSON response
+                async with self.semaphore:
+                    async with self._rate_limit():
+                        result = await self.client.aio.models.generate_content(
+                            model=self.model_name,
+                            contents=[prompt, file],
+                        )
+
+                response_text = str(result.text).strip()
+
+                # Clean up response if it has markdown code blocks
+                if response_text.startswith("```"):
+                    lines = response_text.split("\n")
+                    # Remove first line (```json) and last line (```)
+                    response_text = "\n".join(lines[1:-1])
+
+                # Parse JSON response
+                try:
+                    data = json.loads(response_text)
+                except json.JSONDecodeError:
+                    # If JSON parsing fails, return single page fallback
+                    return {
+                        "is_spread": False,
+                        "left_page": None,
+                        "right_page": None,
+                        "confidence": 0.0
+                    }
+
+                # Validate and normalize response
+                result_data = {
+                    "is_spread": bool(data.get("is_spread", False)),
+                    "left_page": data.get("left_page"),
+                    "right_page": data.get("right_page"),
+                    "confidence": float(data.get("confidence", 0.5))
+                }
+
+                # Validate bounding boxes if spread detected
+                if result_data["is_spread"]:
+                    for page_key in ["left_page", "right_page"]:
+                        bbox = result_data.get(page_key)
+                        if bbox:
+                            # Ensure all values are within valid range
+                            for coord in ["xmin", "ymin", "xmax", "ymax"]:
+                                if coord in bbox:
+                                    bbox[coord] = max(0, min(100, float(bbox[coord])))
+
+                return result_data
+
+            finally:
+                # Clean up uploaded file
+                try:
+                    if sample_file and sample_file.name:
+                        await asyncio.to_thread(self.client.files.delete, name=sample_file.name)
+                except Exception:
+                    pass  # Ignore cleanup errors for spread detection
+
+        except Exception as e:
+            import traceback
+            raise Exception(f"Spread detection failed: {str(e)}\nFull Traceback: {traceback.format_exc()}")
 
 # Global client instance
 try:

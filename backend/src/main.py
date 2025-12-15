@@ -25,6 +25,7 @@ from discover.routes import discover_router
 from npc_chat.routes import npc_chat_router
 from content.routes import edit_request_router
 from pdf.routes import pdf_creator_router
+from pdf.routes import pdf_upload_router
 from permission.routes import permission_router
 
 @asynccontextmanager
@@ -69,6 +70,7 @@ app.include_router(category_router.router, prefix="/category", tags=["Categories
 app.include_router(divination_router.router, prefix="/astrology", tags=["Astrology Prediction"])
 app.include_router(npc_chat_router.router, prefix="/chat", tags=["NPC Chat"])
 app.include_router(pdf_creator_router.router, prefix="/pdf-create", tags=["PDF Creation"])
+app.include_router(pdf_upload_router.router, prefix="/pdf", tags=["PDF Upload"])
 app.include_router(permission_router.router, prefix="/permissions", tags=["Permissions"])
 
 if __name__ == "__main__":
