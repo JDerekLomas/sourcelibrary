@@ -142,3 +142,4 @@ config.local.json
 
 # Local Netlify folder
 .netlify
+codextranslation2/resources/marsilio_ficino_de_mysteriis/pdf/*.pdf
