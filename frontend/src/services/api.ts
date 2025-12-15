@@ -34,7 +34,7 @@ const API_URL = import.meta.env.VITE_API_URL;
 class ApiService {
   private axiosInstance = axios.create({
     baseURL: API_URL,
-    withCredentials: true,
+    withCredentials: false, // Disabled - backend uses Access-Control-Allow-Origin: * which conflicts with credentials
     headers: {
       'X-Tenant-Slug': 'root', // Default tenant for simplified routing
     },

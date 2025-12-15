@@ -3,6 +3,7 @@ import { Routes, Route } from "react-router-dom";
 import BookLibrary from "./pages/BookLibrary";
 import BookDetails from "./pages/BookDetails";
 import BookTranslator from "./pages/BookTranslator";
+import AddBook from "./pages/AddBook";
 import Login from "./pages/Login";
 
 import { AuthProvider } from "./contexts/AuthContext";
@@ -16,6 +17,7 @@ export const SimpleRoutes = () => {
                 <Route path="/library" element={<BookLibrary />} />
                 <Route path="/book/:book_id" element={<BookDetails />} />
                 <Route path="/translator/:book_id/:page_id" element={<BookTranslator />} />
+                <Route path="/add-book" element={<AddBook />} />
                 <Route path="/login" element={<Login />} />
             </Routes>
         </AuthProvider>
