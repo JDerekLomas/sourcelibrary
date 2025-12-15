@@ -1,0 +1,17 @@
+and nourishment for their growth lie within. For it would be foolish to want to make something out of a thing / in which it is not.
+
+When man now further considers / what the Oeconomia of his whole body is / he finds nothing else / than a separation of the superfluous from the little essential good nutrient matter.
+
+This separation, the further it happens from the stomach / the more subtle it is / and also its products are more fixed. For the greatest impure stuff goes through the bowel movement / the other through the urine / the third through the sweat / another through the saliva / another through thenose / another through the pores / etc.
+
+As soon as man becomes sick / it happens for no other reason / than that at this time either through his disorderly life or another accident or through old age that which must make this separation in his different members of the Microcosm / has departed from its temperature / whereby it then has been robbed of its perfect power in one or the other member / to perform this separation according to the order of God / eternally instilled into nature / in all places of the body / as degrees of fire and different vessels and furnaces. Thus of all illnesses and ailments there is only a single cause / the difference being only the place and style / and the majus or minus.
+
+Thus man's whole Oeconomia is a true so-called Chymistry, that is a separation of the Good from the Being / the effect / the effect / the effect / the effect of the good from the Art of the Macrocosm is rightly called spagyrica or Ars Hyllopica.
+
+Since then there is only a single materia spermatica of all members / from which their different substances originate / and also a single food / vis-
+
+cosus Chylus, is sufficient / to nourish, feed and conserve their different substance and being; since also there is only one cause of all their ailments / it becomes clear / that for all their ailments also not more than a single medicine is needed: Yes it appears / that / if a thing is to have the name of a true medicine / that this life force must be in it / that it universally contains within itself the essence of all members / like the Nutriment, which a healthy stomach pre-digests for all members.
+
+Thus is the functio of a true physician created by GOD, to come to the aid of weak and sick nature / and at the time of nature's weakness in man / to begin outside of him / where nature ceases / namely / where she is too weak / to separate the good from the evil. And this he must do not with unseparated medicaments themselves, where the qualitates still lie in anger/strife and filth / and thus themselves require this separation from the superfluous; but with prepared / separated and in the [right] temperature standing [balanced] ones / which support nature's weakness / and only strengthen her / to perform her function. As soon as nature feels this help / she throws out the weed / which her enemy in her sleep / that is / at the time of her weakness / has sown / out herself through this place and Emunctorium, which she knows / so that not only no harm happens to her / but also / which is proper to the affected member / and not / where the conceited raw little subject wants / that flew into his office through the wrong door / because all Contraria and Violenta are enemies to nature / whereby the patient is put in danger.
+
+Behold friend / here fall all the manifold names of the illnesses with their erected manifold

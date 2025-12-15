@@ -1,6 +1,7 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
+import { jsPDF } from "jspdf";
 import {
   PlayCircleIcon,
   Cog6ToothIcon,
@@ -14,6 +15,10 @@ import {
   XMarkIcon,
   PlusIcon,
   TrashIcon,
+  ArrowDownTrayIcon,
+  QueueListIcon,
+  PauseIcon,
+  StopIcon,
 } from "@heroicons/react/24/outline";
 import { ClipboardIcon as ClipboardIconSolid } from "@heroicons/react/24/solid";
 import { PageDetails, Book } from "../types";
@@ -26,17 +31,88 @@ import Toast from "../components/ui/Toast";
 import { useModal } from "../hooks/useModal";
 import { useToast } from "../hooks/useToast";
 
-// Default prompts
+// Default prompts based on translation-workflows documentation
 const DEFAULT_OCR_PROMPTS = [
   { id: "1", name: "Standard OCR", prompt: "OCR the page in {language}. Return only the transcribed text." },
-  { id: "2", name: "Preserve Layout", prompt: "OCR the page in {language}. Preserve the original layout and formatting as much as possible." },
-  { id: "3", name: "With Annotations", prompt: "OCR the page in {language}. Include notes about illegible sections or uncertain readings in [brackets]." },
+  { id: "2", name: "Renaissance Latin (Full)", prompt: `You are transcribing a Renaissance Latin facsimile.
+
+**Instructions**:
+- Start with [[notes: describe page condition, layout, typeface, damage]]
+- Include [[page: N]] if a page number is visible
+- Preserve original capitalization, spelling, and line breaks
+- Use Markdown to mirror the source layout:
+  - # headings for chapter titles
+  - > for centered mottos or dedications
+  - *italics* for italic text
+  - Markdown tables for indices, columns, or tabular content
+- Mark uncertain characters: [[?reading]] or [[alt: optionA / optionB]]
+- Note abbreviations: expand only if certain, otherwise [[abbrev: ã = an? am?]]
+- Flag continuations: [[continues from previous page]] or [[continues to next page]]
+
+**Output**: Only the transcription with markup. No commentary.` },
+  { id: "3", name: "Gothic Typeface", prompt: `OCR the page in {language}. This uses Gothic blackletter typeface.
+
+**Notes**:
+- u and n may be indistinguishable; use context
+- Common ligatures: ch, ck, st, tz
+- Mark uncertain readings with [[?reading]]
+- Preserve original spelling and abbreviations` },
+  { id: "4", name: "With Marginalia", prompt: `OCR the page in {language}.
+
+**Instructions**:
+- Transcribe main text normally
+- Marginal notes: place in [[margin: ...]] blocks after the line they reference
+- Note if printed or manuscript additions
+- Mark uncertain readings with [[?reading]]` },
+  { id: "5", name: "Esoteric Symbols", prompt: `OCR the page in {language}. Pay special attention to alchemical, astrological, and esoteric symbols.
+
+**Symbol guide**:
+- Zodiac: ♈♉♊♋♌♍♎♏♐♑♒♓
+- Planets: ☉☽♄♃♂♀☿
+- Elements: △▽ (fire/water), ★ (air)
+- Use Unicode when possible, [[symbol: description]] when not
+
+Mark uncertain readings with [[?reading]].` },
 ];
 
 const DEFAULT_TRANSLATION_PROMPTS = [
   { id: "1", name: "Literal Translation", prompt: "Translate from {source_lang} to {target_lang}. Provide a literal, accurate translation." },
-  { id: "2", name: "Scholarly Translation", prompt: "Translate from {source_lang} to {target_lang}. Use scholarly language appropriate for academic texts." },
-  { id: "3", name: "Modern Readable", prompt: "Translate from {source_lang} to {target_lang}. Make it readable for modern audiences while preserving meaning." },
+  { id: "2", name: "Renaissance Scholar (Full)", prompt: `You are translating Renaissance {source_lang} into accessible {target_lang}.
+
+**Instructions**:
+- Start with [[notes: context from prior page, tricky phrases, terminology choices]]
+- Mirror the source layout exactly:
+  - Preserve headings, centered text, paragraph breaks
+  - Keep Markdown tables in the same structure
+  - Maintain line breaks where meaningful
+- Use inline [[notes]] for:
+  - Alternate translation possibilities
+  - Historical context a general reader needs
+  - Technical terms that require explanation
+- Style: warm and accessible, like a museum label—explain references rather than leaving jargon
+- Preserve proper names; add context in notes on first occurrence
+
+**Output**: Only the {target_lang} translation with notes. No meta-commentary.` },
+  { id: "3", name: "Scholarly Audience", prompt: `Translate from {source_lang} to {target_lang}.
+
+**Target audience**: Scholars familiar with the period
+**Tone**: Formal, preserve {source_lang} structure where elegant
+**Technical terms**: Use standard scholarly translations
+**Notes**: Focus on textual issues, not basic context` },
+  { id: "4", name: "General Readers", prompt: `Translate from {source_lang} to {target_lang}.
+
+**Target audience**: Educated general readers
+**Tone**: Accessible, prioritize clarity over literalness
+**Technical terms**: Always explain on first use
+**Notes**: Provide historical and cultural context generously` },
+  { id: "5", name: "Esoteric/Alchemical", prompt: `Translate from {source_lang} to {target_lang}. This is an esoteric/alchemical text.
+
+**Key terminology** (preserve consistently):
+- anima → "soul" (not "mind" or "spirit")
+- spiritus → "spirit" when metaphysical, "breath/air" when physical
+- natura → "nature" (capitalize when personified)
+
+Preserve symbolic terminology. Add brief [[notes]] only where essential for comprehension.` },
 ];
 
 interface PromptItem {
@@ -77,6 +153,18 @@ const BookTranslator: React.FC = () => {
   // Settings modals
   const [ocrSettingsOpen, setOcrSettingsOpen] = useState(false);
   const [translationSettingsOpen, setTranslationSettingsOpen] = useState(false);
+
+  // Batch processing
+  const [batchModalOpen, setBatchModalOpen] = useState(false);
+  const [batchProcessing, setBatchProcessing] = useState(false);
+  const [batchPaused, setBatchPaused] = useState(false);
+  const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0, currentPage: 0 });
+  const [batchStartPage, setBatchStartPage] = useState(1);
+  const [batchEndPage, setBatchEndPage] = useState(1);
+  const [batchIncludeOcr, setBatchIncludeOcr] = useState(true);
+  const [batchIncludeTranslation, setBatchIncludeTranslation] = useState(true);
+  const batchPausedRef = useRef(false);
+  const batchCancelledRef = useRef(false);
 
   // Prompt library
   const [ocrPrompts, setOcrPrompts] = useState<PromptItem[]>(() => {
@@ -291,6 +379,152 @@ const BookTranslator: React.FC = () => {
     }
   };
 
+  // Batch processing handler
+  const runBatchProcessing = async () => {
+    if (!book || allPages.length === 0) return;
+    if (isDemo) {
+      showModalError("Demo Mode", "Batch processing is not available in demo mode.");
+      return;
+    }
+
+    // Validate page range
+    const startIdx = batchStartPage - 1;
+    const endIdx = Math.min(batchEndPage - 1, allPages.length - 1);
+
+    if (startIdx < 0 || startIdx > endIdx) {
+      showModalError("Invalid Range", "Please select a valid page range.");
+      return;
+    }
+
+    const pagesToProcess = allPages.slice(startIdx, endIdx + 1);
+    const total = pagesToProcess.length;
+
+    setBatchProcessing(true);
+    setBatchPaused(false);
+    batchPausedRef.current = false;
+    batchCancelledRef.current = false;
+    setBatchProgress({ current: 0, total, currentPage: pagesToProcess[0]?.page_number || 0 });
+
+    let previousOcrText = "";
+    let previousTranslationText = "";
+
+    // Get context from page before start (if exists)
+    if (startIdx > 0) {
+      const prevPage = allPages[startIdx - 1];
+      previousOcrText = prevPage.ocr?.data || "";
+      previousTranslationText = prevPage.translation?.data || "";
+    }
+
+    for (let i = 0; i < pagesToProcess.length; i++) {
+      // Check for cancellation
+      if (batchCancelledRef.current) {
+        showSuccess(`Batch cancelled after ${i} pages`);
+        break;
+      }
+
+      // Wait while paused
+      while (batchPausedRef.current && !batchCancelledRef.current) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+
+      const page = pagesToProcess[i];
+      setBatchProgress({ current: i + 1, total, currentPage: page.page_number });
+
+      try {
+        let currentOcrText = page.ocr?.data || "";
+        let currentTranslationText = page.translation?.data || "";
+
+        // Run OCR if selected
+        if (batchIncludeOcr) {
+          const ocrPrompt = currentOcrPromptText
+            .replace("{language}", page.ocr?.language || book.language || "German");
+
+          // Add context from previous page
+          const ocrPromptWithContext = previousOcrText
+            ? `${ocrPrompt}\n\n**Previous page OCR (for context/continuity)**:\n${previousOcrText.slice(-500)}`
+            : ocrPrompt;
+
+          const ocrResponse = await apiService.performOCR({
+            pageId: page.id,
+            photoUrl: page.photo,
+            language: page.ocr?.language || book.language || "German",
+            aiModel: pageDetails?.ocr.model || "mistral",
+            customPrompt: ocrPromptWithContext,
+            autoSave: true,
+          });
+
+          currentOcrText = ocrResponse.ocr;
+        }
+
+        // Run Translation if selected and OCR exists
+        if (batchIncludeTranslation && currentOcrText) {
+          const translationPrompt = currentTranslationPromptText
+            .replace("{source_lang}", page.ocr?.language || book.language || "German")
+            .replace("{target_lang}", page.translation?.language || "English");
+
+          // Add context from previous page
+          const translationPromptWithContext = previousTranslationText
+            ? `${translationPrompt}\n\n**Previous page translation (for context/continuity)**:\n${previousTranslationText.slice(-500)}`
+            : translationPrompt;
+
+          const translationResponse = await apiService.performTranslation({
+            pageId: page.id,
+            text: currentOcrText,
+            sourceLang: page.ocr?.language || book.language || "German",
+            targetLang: page.translation?.language || "English",
+            aiModel: pageDetails?.translation.model || "gemini",
+            customPrompt: translationPromptWithContext,
+            autoSave: true,
+          });
+
+          currentTranslationText = translationResponse.translation;
+        }
+
+        // Update context for next page
+        previousOcrText = currentOcrText;
+        previousTranslationText = currentTranslationText;
+
+        // Update current page if it matches
+        if (page.id === pageDetails?.id) {
+          setPageDetails((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  ocr: { ...prev.ocr, data: currentOcrText },
+                  translation: { ...prev.translation, data: currentTranslationText },
+                }
+              : null
+          );
+        }
+
+      } catch (error) {
+        console.error(`Error processing page ${page.page_number}:`, error);
+        // Continue with next page instead of stopping
+      }
+
+      // Small delay between pages to avoid rate limiting
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+
+    setBatchProcessing(false);
+    setBatchProgress({ current: 0, total: 0, currentPage: 0 });
+
+    if (!batchCancelledRef.current) {
+      showSuccess(`Batch processing complete! Processed ${total} pages.`);
+    }
+  };
+
+  const toggleBatchPause = () => {
+    batchPausedRef.current = !batchPausedRef.current;
+    setBatchPaused(batchPausedRef.current);
+  };
+
+  const cancelBatchProcessing = () => {
+    batchCancelledRef.current = true;
+    batchPausedRef.current = false;
+    setBatchPaused(false);
+  };
+
   // Copy handlers
   const copyOcrText = async () => {
     if (pageDetails?.ocr.data) {
@@ -306,6 +540,194 @@ const BookTranslator: React.FC = () => {
       setTranslationCopied(true);
       setTimeout(() => setTranslationCopied(false), 2000);
     }
+  };
+
+  // Download handlers
+  const downloadMarkdown = (content: string, filename: string) => {
+    const blob = new Blob([content], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadOcrMarkdown = () => {
+    if (!pageDetails?.ocr.data || !book) return;
+    const bookSlug = (book.title || "book").toLowerCase().replace(/\s+/g, "_").slice(0, 30);
+    const pageNum = String(pageDetails.page_number).padStart(3, "0");
+    const filename = `${bookSlug}_page_${pageNum}_ocr.md`;
+
+    const content = `# ${book.display_title || book.title}
+## Page ${pageDetails.page_number} - OCR Text
+
+**Source**: [Source Library](https://sourcelibrary.vercel.app/book/${book.id})
+**Language**: ${pageDetails.ocr.language}
+**Generated**: ${new Date().toISOString().split("T")[0]}
+
+---
+
+${pageDetails.ocr.data}
+
+---
+*Generated by Source Library - Preserving rare esoteric texts*
+`;
+    downloadMarkdown(content, filename);
+    showSuccess("OCR downloaded as markdown");
+  };
+
+  const downloadTranslationMarkdown = () => {
+    if (!pageDetails?.translation.data || !book) return;
+    const bookSlug = (book.title || "book").toLowerCase().replace(/\s+/g, "_").slice(0, 30);
+    const pageNum = String(pageDetails.page_number).padStart(3, "0");
+    const filename = `${bookSlug}_page_${pageNum}_translation.md`;
+
+    const content = `# ${book.display_title || book.title}
+## Page ${pageDetails.page_number} - Translation
+
+**Source**: [Source Library](https://sourcelibrary.vercel.app/book/${book.id})
+**Original Language**: ${pageDetails.ocr.language}
+**Translated to**: ${pageDetails.translation.language}
+**Generated**: ${new Date().toISOString().split("T")[0]}
+
+---
+
+${pageDetails.translation.data}
+
+---
+*Generated by Source Library - Preserving rare esoteric texts*
+`;
+    downloadMarkdown(content, filename);
+    showSuccess("Translation downloaded as markdown");
+  };
+
+  const downloadBilingualMarkdown = () => {
+    if (!pageDetails || !book) return;
+    const bookSlug = (book.title || "book").toLowerCase().replace(/\s+/g, "_").slice(0, 30);
+    const pageNum = String(pageDetails.page_number).padStart(3, "0");
+    const filename = `${bookSlug}_page_${pageNum}_bilingual.md`;
+
+    const content = `# ${book.display_title || book.title}
+## Page ${pageDetails.page_number} - Bilingual Edition
+
+**Source**: [Source Library](https://sourcelibrary.vercel.app/book/${book.id})
+**Original Language**: ${pageDetails.ocr.language}
+**Translated to**: ${pageDetails.translation.language}
+**Generated**: ${new Date().toISOString().split("T")[0]}
+
+---
+
+## Original Text (${pageDetails.ocr.language})
+
+${pageDetails.ocr.data || "*No OCR text available*"}
+
+---
+
+## Translation (${pageDetails.translation.language})
+
+${pageDetails.translation.data || "*No translation available*"}
+
+---
+*Generated by Source Library - Preserving rare esoteric texts*
+*View original: https://sourcelibrary.vercel.app/translator/${book.id}/${pageDetails.id}*
+`;
+    downloadMarkdown(content, filename);
+    showSuccess("Bilingual edition downloaded as markdown");
+  };
+
+  const downloadBilingualPDF = () => {
+    if (!pageDetails || !book) return;
+
+    const bookSlug = (book.title || "book").toLowerCase().replace(/\s+/g, "_").slice(0, 30);
+    const pageNum = String(pageDetails.page_number).padStart(3, "0");
+    const filename = `${bookSlug}_page_${pageNum}_bilingual.pdf`;
+
+    // Create PDF in landscape for side-by-side layout
+    const pdf = new jsPDF({
+      orientation: "landscape",
+      unit: "mm",
+      format: "a4",
+    });
+
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 15;
+    const columnWidth = (pageWidth - margin * 3) / 2;
+    const contentHeight = pageHeight - margin * 2 - 25; // Leave room for header/footer
+
+    // Header
+    pdf.setFontSize(14);
+    pdf.setFont("helvetica", "bold");
+    pdf.text(book.display_title || book.title, margin, margin + 5);
+
+    pdf.setFontSize(10);
+    pdf.setFont("helvetica", "normal");
+    pdf.text(`Page ${pageDetails.page_number}`, pageWidth - margin - 20, margin + 5);
+
+    // Divider line
+    pdf.setDrawColor(200, 200, 200);
+    pdf.line(margin, margin + 10, pageWidth - margin, margin + 10);
+
+    // Column headers
+    const headerY = margin + 18;
+    pdf.setFontSize(11);
+    pdf.setFont("helvetica", "bold");
+    pdf.text(`Original (${pageDetails.ocr.language})`, margin, headerY);
+    pdf.text(`Translation (${pageDetails.translation.language || "English"})`, margin + columnWidth + margin, headerY);
+
+    // Content
+    pdf.setFontSize(9);
+    pdf.setFont("helvetica", "normal");
+    const contentY = headerY + 8;
+    const lineHeight = 4.5;
+    const maxLines = Math.floor(contentHeight / lineHeight);
+
+    // Helper to wrap text and render
+    const renderColumn = (text: string, x: number, y: number, width: number) => {
+      if (!text) {
+        pdf.setTextColor(150, 150, 150);
+        pdf.text("No content available", x, y);
+        pdf.setTextColor(0, 0, 0);
+        return;
+      }
+
+      const lines = pdf.splitTextToSize(text, width);
+      const displayLines = lines.slice(0, maxLines);
+
+      displayLines.forEach((line: string, i: number) => {
+        pdf.text(line, x, y + i * lineHeight);
+      });
+
+      if (lines.length > maxLines) {
+        pdf.setTextColor(150, 150, 150);
+        pdf.text(`... (${lines.length - maxLines} more lines)`, x, y + maxLines * lineHeight);
+        pdf.setTextColor(0, 0, 0);
+      }
+    };
+
+    // Render OCR column
+    renderColumn(pageDetails.ocr.data || "", margin, contentY, columnWidth);
+
+    // Render Translation column
+    renderColumn(pageDetails.translation.data || "", margin + columnWidth + margin, contentY, columnWidth);
+
+    // Center divider
+    pdf.setDrawColor(220, 220, 220);
+    pdf.line(margin + columnWidth + margin / 2, headerY - 5, margin + columnWidth + margin / 2, pageHeight - margin - 10);
+
+    // Footer
+    pdf.setFontSize(8);
+    pdf.setTextColor(100, 100, 100);
+    const footerY = pageHeight - margin;
+    pdf.text("Source Library - Preserving rare esoteric texts", margin, footerY);
+    pdf.text(`sourcelibrary.vercel.app/book/${book.id}`, pageWidth / 2, footerY, { align: "center" });
+    pdf.text(new Date().toISOString().split("T")[0], pageWidth - margin, footerY, { align: "right" });
+
+    pdf.save(filename);
+    showSuccess("Bilingual PDF downloaded");
   };
 
   // Update handlers
@@ -694,6 +1116,23 @@ const BookTranslator: React.FC = () => {
                 <ChevronRightIcon className="h-5 w-5 text-gray-600" />
               </button>
             </div>
+
+            {/* Batch Processing Button */}
+            {viewMode === "edit" && (
+              <button
+                onClick={() => {
+                  setBatchStartPage(1);
+                  setBatchEndPage(allPages.length);
+                  setBatchModalOpen(true);
+                }}
+                disabled={allPages.length === 0 || isDemo}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-100 text-purple-700 hover:bg-purple-200 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title={isDemo ? "Batch processing not available in demo mode" : "Process multiple pages"}
+              >
+                <QueueListIcon className="h-4 w-4" />
+                Batch
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -777,6 +1216,14 @@ const BookTranslator: React.FC = () => {
                       <ClipboardIcon className="h-4 w-4 text-gray-500" />
                     )}
                   </button>
+                  <button
+                    onClick={downloadOcrMarkdown}
+                    disabled={!pageDetails?.ocr?.data}
+                    className="p-1.5 hover:bg-gray-100 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Download as markdown"
+                  >
+                    <ArrowDownTrayIcon className="h-4 w-4 text-gray-500" />
+                  </button>
                 </div>
               </div>
 
@@ -844,6 +1291,30 @@ const BookTranslator: React.FC = () => {
                     <ClipboardIcon className="h-4 w-4 text-gray-500" />
                   )}
                 </button>
+                <button
+                  onClick={downloadTranslationMarkdown}
+                  disabled={!pageDetails?.translation?.data}
+                  className="p-1.5 hover:bg-gray-100 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Download translation as markdown"
+                >
+                  <ArrowDownTrayIcon className="h-4 w-4 text-gray-500" />
+                </button>
+                <button
+                  onClick={downloadBilingualMarkdown}
+                  disabled={!pageDetails?.ocr?.data && !pageDetails?.translation?.data}
+                  className="px-2 py-1 text-xs font-medium bg-purple-100 text-purple-700 hover:bg-purple-200 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Download bilingual markdown"
+                >
+                  .md
+                </button>
+                <button
+                  onClick={downloadBilingualPDF}
+                  disabled={!pageDetails?.ocr?.data && !pageDetails?.translation?.data}
+                  className="px-2 py-1 text-xs font-medium bg-purple-600 text-white hover:bg-purple-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Download bilingual PDF"
+                >
+                  PDF
+                </button>
               </div>
             </div>
 
@@ -907,6 +1378,163 @@ const BookTranslator: React.FC = () => {
         currentPromptText={currentTranslationPromptText}
         onPromptTextChange={setCurrentTranslationPromptText}
       />
+
+      {/* Batch Processing Modal */}
+      {batchModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">Batch Processing</h2>
+              <button
+                onClick={() => setBatchModalOpen(false)}
+                disabled={batchProcessing}
+                className="p-1 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+              >
+                <XMarkIcon className="h-5 w-5 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-4 space-y-4">
+              {/* Progress Indicator (when processing) */}
+              {batchProcessing && (
+                <div className="bg-purple-50 rounded-lg p-4 space-y-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium text-purple-900">
+                      Processing page {batchProgress.currentPage}
+                    </span>
+                    <span className="text-purple-700">
+                      {batchProgress.current} / {batchProgress.total}
+                    </span>
+                  </div>
+                  <div className="w-full bg-purple-200 rounded-full h-2">
+                    <div
+                      className="bg-purple-600 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${(batchProgress.current / batchProgress.total) * 100}%` }}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={toggleBatchPause}
+                      className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        batchPaused
+                          ? "bg-green-100 text-green-700 hover:bg-green-200"
+                          : "bg-yellow-100 text-yellow-700 hover:bg-yellow-200"
+                      }`}
+                    >
+                      {batchPaused ? (
+                        <>
+                          <PlayCircleIcon className="h-4 w-4" />
+                          Resume
+                        </>
+                      ) : (
+                        <>
+                          <PauseIcon className="h-4 w-4" />
+                          Pause
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={cancelBatchProcessing}
+                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg text-sm font-medium transition-colors"
+                    >
+                      <StopIcon className="h-4 w-4" />
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Configuration (when not processing) */}
+              {!batchProcessing && (
+                <>
+                  <p className="text-sm text-gray-600">
+                    Process multiple pages sequentially. Each page uses the previous page's content for context and continuity.
+                  </p>
+
+                  {/* Page Range */}
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">Page Range</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={1}
+                        max={allPages.length}
+                        value={batchStartPage}
+                        onChange={(e) => setBatchStartPage(Math.max(1, parseInt(e.target.value) || 1))}
+                        className="w-20 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                      />
+                      <span className="text-gray-500">to</span>
+                      <input
+                        type="number"
+                        min={batchStartPage}
+                        max={allPages.length}
+                        value={batchEndPage}
+                        onChange={(e) => setBatchEndPage(Math.max(batchStartPage, parseInt(e.target.value) || batchStartPage))}
+                        className="w-20 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                      />
+                      <span className="text-sm text-gray-500">of {allPages.length}</span>
+                    </div>
+                  </div>
+
+                  {/* Operations */}
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">Operations</label>
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={batchIncludeOcr}
+                          onChange={(e) => setBatchIncludeOcr(e.target.checked)}
+                          className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                        />
+                        <span className="text-sm text-gray-700">Run OCR on each page</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={batchIncludeTranslation}
+                          onChange={(e) => setBatchIncludeTranslation(e.target.checked)}
+                          className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                        />
+                        <span className="text-sm text-gray-700">Translate each page</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Estimate */}
+                  <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-600">
+                    <strong>{batchEndPage - batchStartPage + 1}</strong> pages will be processed.
+                    {batchIncludeOcr && batchIncludeTranslation && " Each page: OCR → Translation."}
+                    {batchIncludeOcr && !batchIncludeTranslation && " Each page: OCR only."}
+                    {!batchIncludeOcr && batchIncludeTranslation && " Each page: Translation only (using existing OCR)."}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Footer */}
+            {!batchProcessing && (
+              <div className="p-4 border-t border-gray-200 flex gap-2">
+                <button
+                  onClick={() => setBatchModalOpen(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={runBatchProcessing}
+                  disabled={!batchIncludeOcr && !batchIncludeTranslation}
+                  className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 disabled:bg-purple-400 transition-colors"
+                >
+                  Start Processing
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <Modal
         isOpen={modalState.isOpen}

@@ -1,0 +1,56 @@
+{
+  "summary": "This text distinguishes between 'learning,' which is acquired through human effort, and 'wisdom,' which is a gift from God. The author argues that prioritizing learning over wisdom leads to hypocrisy and conflict, referencing the Pharisees as an example. True progress in society and religion can only happen when wisdom is restored to its proper place, bringing love and certainty.",
+  "key_terms": [
+    {
+      "german": "Doctrina",
+      "english": "Learning",
+      "context": "The text's term for human-acquired knowledge, contrasted with divinely-given wisdom."
+    },
+    {
+      "german": "Sapientia",
+      "english": "Wisdom",
+      "context": "The text's term for a gift from God, contrasted with human learning."
+    },
+    {
+      "german": "donum naturale",
+      "english": "a natural gift",
+      "context": "A Latin phrase used to describe learning, something that can be acquired through human skill."
+    },
+    {
+      "german": "donum Dei",
+      "english": "a gift of God",
+      "context": "A Latin phrase used to describe wisdom, which cannot be acquired by human effort."
+    }
+  ],
+  "people": [
+    {
+      "name": "Pharisees",
+      "role": "A learned Jewish sect from the Old and New Testaments, cited as an example of those who prioritize learning over wisdom, leading to mischief and discord."
+    },
+    {
+      "name": "Sadducees",
+      "role": "A scribal Jewish sect, mentioned alongside the Pharisees as examples of the learned who cause trouble and resist the divinely inspired."
+    },
+    {
+      "name": "Prophets",
+      "role": "Figures from the Old Testament who were resisted by the learned (Pharisees and Sadducees) and are implicitly associated with Divine Wisdom."
+    },
+    {
+      "name": "Apostles",
+      "role": "Figures from the New Testament who, like the Prophets, were resisted by the learned and are implicitly associated with Divine Wisdom."
+    }
+  ],
+  "concepts": [
+    "The distinction between Learning (Doctrina) as a human-acquired 'natural gift' and Wisdom (Sapientia) as a divine 'gift of God'.",
+    "The argument that prioritizing learning over wisdom leads to hypocrisy, discord, and the loss of love and certainty.",
+    "The use of the Pharisees and Sadducees as historical examples of learned groups who resisted divinely-inspired figures (Prophets and Apostles).",
+    "The hope for a restoration of wisdom to its rightful dominion, which would lead to progress in both the Church and in arts and sciences."
+  ],
+  "connections": "This page is numbered (24), indicating it is part of a larger work. Without the preceding page, specific thematic or narrative connections cannot be established.",
+  "flags": [
+    "The phrasing 'scribal Sadducees' may have a specific theological implication that requires expert review.",
+    "The historical and theological context of this argument (Learning vs. Wisdom) could be further clarified by an expert to place it within a specific philosophical or religious tradition.",
+    "The connection made between the restoration of Wisdom and the advancement of 'art and sciences' is significant and could benefit from an expert interpretation."
+  ],
+  "confidence": 0.9
+}

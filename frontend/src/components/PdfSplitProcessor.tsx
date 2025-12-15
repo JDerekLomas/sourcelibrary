@@ -7,6 +7,7 @@ interface PdfSplitProcessorProps {
   bookId: string;
   bookLanguage?: string;
   existingPages?: Page[];
+  initialPdfFile?: File;
   onSuccess?: (createdPages: number) => void;
   onError?: (error: string) => void;
   onClose?: () => void;
@@ -28,11 +29,12 @@ const PdfSplitProcessor: React.FC<PdfSplitProcessorProps> = ({
   bookId,
   bookLanguage = "",
   existingPages = [],
+  initialPdfFile,
   onSuccess,
   onError,
   onClose,
 }) => {
-  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [pdfFile, setPdfFile] = useState<File | null>(initialPdfFile || null);
   const [enableSpreadDetection, setEnableSpreadDetection] = useState(true);
   const [splitConfidence, setSplitConfidence] = useState(0.7);
   const [previewCount, setPreviewCount] = useState(10);
