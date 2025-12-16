@@ -43,15 +43,11 @@ export const PATHS = {
   UNITY_GAME: (tenant: string) => withTenant(tenant, ROUTE_SEGMENTS.UNITY_GAME),
   PHASER_GAME: (tenant: string) => withTenant(tenant, ROUTE_SEGMENTS.PHASER_GAME),
 
-  TRANSLATION: (tenant: string, bookId: string, pageId: string) => {
-    return `/${tenant}/${ROUTE_SEGMENTS.TRANSLATION.
-      replace(":book_id", bookId).
-      replace(":page_id", pageId)}`;
+  TRANSLATION: (_tenant: string, bookId: string, pageId: string) => {
+    return `/translator/${bookId}/${pageId}`;
   },
 
-  TRANSLATOR: (tenant: string, bookId: string, pageId: string) => {
-    return `/${tenant}/${ROUTE_SEGMENTS.TRANSLATOR.
-      replace(":book_id", bookId).
-      replace(":page_id", pageId)}`;
+  TRANSLATOR: (_tenant: string, bookId: string, pageId: string) => {
+    return `/translator/${bookId}/${pageId}`;
   }
 };

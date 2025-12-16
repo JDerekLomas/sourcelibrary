@@ -36,7 +36,7 @@ class ApiService {
     baseURL: API_URL,
     withCredentials: false, // Disabled - backend uses Access-Control-Allow-Origin: * which conflicts with credentials
     headers: {
-      'X-Tenant-Slug': 'root', // Default tenant for simplified routing
+      'X-Tenant-Slug': 'rit', // Ritman Library tenant
     },
   });
 

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
+import remarkBreaks from "remark-breaks";
 import { jsPDF } from "jspdf";
 import {
   PlayCircleIcon,
@@ -19,6 +20,7 @@ import {
   QueueListIcon,
   PauseIcon,
   StopIcon,
+  ScissorsIcon,
 } from "@heroicons/react/24/outline";
 import { ClipboardIcon as ClipboardIconSolid } from "@heroicons/react/24/solid";
 import { PageDetails, Book } from "../types";
@@ -166,6 +168,9 @@ const BookTranslator: React.FC = () => {
   const batchPausedRef = useRef(false);
   const batchCancelledRef = useRef(false);
 
+  // Page split
+  const [splitting, setSplitting] = useState(false);
+
   // Prompt library
   const [ocrPrompts, setOcrPrompts] = useState<PromptItem[]>(() => {
     const saved = localStorage.getItem("ocrPrompts");
@@ -191,6 +196,13 @@ const BookTranslator: React.FC = () => {
 
   // Check if this is demo mode
   const isDemo = book_id === "demo" || book_id?.startsWith("demo-");
+
+  // Utility function to strip markdown image links from text
+  const stripImageLinks = useCallback((text: string): string => {
+    if (!text) return "";
+    // Remove ![alt](url) patterns
+    return text.replace(/!\[([^\]]*)\]\([^)]+\)/g, "");
+  }, []);
 
   // Save prompts to localStorage
   useEffect(() => {
@@ -730,6 +742,96 @@ ${pageDetails.translation.data || "*No translation available*"}
     showSuccess("Bilingual PDF downloaded");
   };
 
+  // Extract right half of current page and add as next page
+  const handleSplitPage = async () => {
+    if (!pageDetails || !book_id || isDemo) return;
+
+    setSplitting(true);
+
+    try {
+      // Fetch image through proxy to avoid CORS issues
+      const proxyUrl = apiService.getImageProxyUrl(pageDetails.photo);
+      console.log("Fetching image from proxy:", proxyUrl);
+      const response = await fetch(proxyUrl);
+      if (!response.ok) throw new Error(`Failed to fetch image through proxy: ${response.status}`);
+      const blob = await response.blob();
+      console.log("Fetched blob:", blob.size, "bytes, type:", blob.type);
+      const imageUrl = URL.createObjectURL(blob);
+
+      // Load the image from blob URL
+      const img = new Image();
+
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error("Failed to load image"));
+        img.src = imageUrl;
+      });
+
+      console.log("Image loaded:", img.width, "x", img.height);
+
+      // Clean up blob URL after image loads
+      URL.revokeObjectURL(imageUrl);
+
+      // Create canvas for right half only
+      const rightCanvas = document.createElement("canvas");
+      rightCanvas.width = Math.floor(img.width / 2);
+      rightCanvas.height = img.height;
+      const rightCtx = rightCanvas.getContext("2d");
+      if (!rightCtx) throw new Error("Failed to create canvas context");
+      rightCtx.drawImage(img, Math.floor(img.width / 2), 0, rightCanvas.width, img.height, 0, 0, rightCanvas.width, img.height);
+
+      // Convert canvas to blob
+      const rightBlob = await new Promise<Blob>((resolve, reject) => {
+        rightCanvas.toBlob((blob) => {
+          if (blob) resolve(blob);
+          else reject(new Error("Failed to create right image blob"));
+        }, "image/jpeg", 0.9);
+      });
+
+      console.log("Right half blob:", rightBlob.size, "bytes, type:", rightBlob.type);
+
+      // Create new page for right half - include all required fields
+      const rightFile = new File([rightBlob], "right_page.jpg", { type: "image/jpeg" });
+      const rightFormData = new FormData();
+      rightFormData.append("book_id", book_id);
+      rightFormData.append("page_number", String(pageDetails.page_number + 1));
+      rightFormData.append("photo", rightFile);
+      // Include all required OCR/translation fields (matching BookDetails.tsx pattern)
+      rightFormData.append("ocr_language", pageDetails.ocr.language || book?.language || "");
+      rightFormData.append("ocr_model", "gemini");
+      rightFormData.append("ocr_data", "");
+      rightFormData.append("translation_language", pageDetails.translation.language || "English");
+      rightFormData.append("translation_model", "gemini");
+      rightFormData.append("translation_data", "");
+
+      // Log what we're sending
+      console.log("Creating page with:", {
+        book_id,
+        page_number: pageDetails.page_number + 1,
+        file_size: rightFile.size,
+        file_type: rightFile.type,
+        ocr_language: pageDetails.ocr.language || book?.language || "",
+        translation_language: pageDetails.translation.language || "English"
+      });
+
+      const newPage = await apiService.createPage(rightFormData);
+      console.log("New page created:", newPage);
+
+      // Update allPages list
+      const newAllPages = [...allPages];
+      const insertIndex = currentPageIndex + 1;
+      newAllPages.splice(insertIndex, 0, newPage as PageDetails);
+      setAllPages(newAllPages);
+
+      showSuccess("Right half extracted and added as next page. Original page unchanged.");
+    } catch (error) {
+      console.error("Error splitting page:", error);
+      showModalError("Split Failed", `Failed to split page: ${error instanceof Error ? error.message : "Unknown error"}`);
+    } finally {
+      setSplitting(false);
+    }
+  };
+
   // Update handlers
   const handleOcrTextChange = (value: string) => {
     setPageDetails((prev) =>
@@ -837,85 +939,69 @@ ${pageDetails.translation.data || "*No translation available*"}
     </div>
   );
 
-  // Text display component with markdown
+  // Text display component with markdown (strips image links)
   const TextDisplay = ({
     content,
     placeholder
   }: {
     content: string;
     placeholder: string;
-  }) => (
-    <div className="h-full overflow-y-auto">
-      {content ? (
-        <div className="prose prose-sm max-w-none font-serif leading-relaxed">
-          <ReactMarkdown
-            components={{
-              img: ({ ...props }) => (
-                <img
-                  {...props}
-                  className="max-w-full h-auto mx-auto my-4 rounded shadow-sm"
-                />
-              ),
-              p: ({ children }) => (
-                <p className="mb-4 text-gray-800">{children}</p>
-              ),
-              h1: ({ children }) => (
-                <h1 className="text-xl font-bold mb-3 text-gray-900">{children}</h1>
-              ),
-              h2: ({ children }) => (
-                <h2 className="text-lg font-bold mb-2 text-gray-900">{children}</h2>
-              ),
-            }}
-          >
-            {content}
-          </ReactMarkdown>
-        </div>
-      ) : (
-        <div className="flex flex-col items-center justify-center h-full text-gray-400">
-          <BookOpenIcon className="h-12 w-12 mb-2 opacity-50" />
-          <p className="text-sm italic">{placeholder}</p>
-        </div>
-      )}
-    </div>
-  );
-
-  // Settings Modal Component
-  const SettingsModal = ({
-    isOpen,
-    onClose,
-    title,
-    prompts,
-    selectedPromptId,
-    onSelectPrompt,
-    onAddPrompt,
-    onDeletePrompt,
-    onUpdatePrompt,
-    model,
-    onModelChange,
-    models,
-    type,
-    currentPromptText,
-    onPromptTextChange,
-  }: {
-    isOpen: boolean;
-    onClose: () => void;
-    title: string;
-    prompts: PromptItem[];
-    selectedPromptId: string;
-    onSelectPrompt: (id: string) => void;
-    onAddPrompt: () => void;
-    onDeletePrompt: (id: string) => void;
-    onUpdatePrompt: (id: string, prompt: string) => void;
-    model: string;
-    onModelChange: (model: string) => void;
-    models: { value: string; label: string }[];
-    type: "ocr" | "translation";
-    currentPromptText: string;
-    onPromptTextChange: (text: string) => void;
   }) => {
-    if (!isOpen) return null;
+    // Strip image links from content before rendering
+    const cleanContent = stripImageLinks(content);
 
-    const selectedPrompt = prompts.find((p) => p.id === selectedPromptId);
+    return (
+      <div className="h-full max-h-[calc(100vh-300px)] overflow-y-auto">
+        {cleanContent ? (
+          <div className="prose prose-sm max-w-none font-serif leading-relaxed">
+            <ReactMarkdown
+              remarkPlugins={[remarkBreaks]}
+              components={{
+                // Skip rendering any images that might slip through
+                img: () => null,
+                p: ({ children }) => (
+                  <p className="mb-4 text-gray-800">{children}</p>
+                ),
+                h1: ({ children }) => (
+                  <h1 className="text-xl font-bold mb-3 text-gray-900">{children}</h1>
+                ),
+                h2: ({ children }) => (
+                  <h2 className="text-lg font-bold mb-2 text-gray-900">{children}</h2>
+                ),
+              }}
+            >
+              {cleanContent}
+            </ReactMarkdown>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full text-gray-400">
+            <BookOpenIcon className="h-12 w-12 mb-2 opacity-50" />
+            <p className="text-sm italic">{placeholder}</p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Settings Modal Component - render function (not a component to avoid re-mounting)
+  const renderSettingsModal = (
+    isOpen: boolean,
+    onClose: () => void,
+    title: string,
+    prompts: PromptItem[],
+    selectedPromptId: string,
+    onSelectPrompt: (id: string) => void,
+    onAddPrompt: () => void,
+    onDeletePrompt: (id: string) => void,
+    onUpdatePrompt: (id: string, prompt: string) => void,
+    model: string,
+    onModelChange: (model: string) => void,
+    models: { value: string; label: string }[],
+    type: "ocr" | "translation",
+    currentPromptText: string,
+    onPromptTextChange: (text: string) => void,
+  ) => {
+    if (!isOpen) return null;
 
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -989,16 +1075,18 @@ ${pageDetails.translation.data || "*No translation available*"}
                 </span>
               </label>
               <textarea
-                value={currentPromptText}
-                onChange={(e) => onPromptTextChange(e.target.value)}
+                defaultValue={currentPromptText}
+                key={selectedPromptId}
+                onBlur={(e) => onPromptTextChange(e.target.value)}
                 rows={8}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 font-mono"
+                autoComplete="off"
+                spellCheck={false}
               />
               <div className="flex justify-end mt-2">
                 <button
                   onClick={() => onUpdatePrompt(selectedPromptId, currentPromptText)}
-                  disabled={currentPromptText === selectedPrompt?.prompt}
-                  className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 disabled:opacity-50 disabled:cursor-not-allowed text-purple-700 rounded-lg text-sm font-medium transition-colors"
+                  className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg text-sm font-medium transition-colors"
                 >
                   Save Changes
                 </button>
@@ -1058,9 +1146,14 @@ ${pageDetails.translation.data || "*No translation available*"}
               <ArrowLeftIcon className="h-5 w-5 text-gray-600" />
             </button>
             <div>
-              <h1 className="text-lg font-semibold text-gray-900 font-serif line-clamp-1">
-                {book?.display_title || book?.title || "Loading..."}
-              </h1>
+              <Link
+                to={`/book/${book_id}`}
+                className="hover:text-purple-700 transition-colors"
+              >
+                <h1 className="text-lg font-semibold text-gray-900 hover:text-purple-700 font-serif line-clamp-1">
+                  {book?.display_title || book?.title || "Loading..."}
+                </h1>
+              </Link>
               <p className="text-sm text-gray-500">
                 Page {pageDetails?.page_number || "..."} of {allPages.length || "..."}
               </p>
@@ -1120,17 +1213,13 @@ ${pageDetails.translation.data || "*No translation available*"}
             {/* Batch Processing Button */}
             {viewMode === "edit" && (
               <button
-                onClick={() => {
-                  setBatchStartPage(1);
-                  setBatchEndPage(allPages.length);
-                  setBatchModalOpen(true);
-                }}
+                onClick={() => navigate(`/batch/${book_id}`)}
                 disabled={allPages.length === 0 || isDemo}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-100 text-purple-700 hover:bg-purple-200 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-lg text-sm font-semibold shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
                 title={isDemo ? "Batch processing not available in demo mode" : "Process multiple pages"}
               >
-                <QueueListIcon className="h-4 w-4" />
-                Batch
+                <QueueListIcon className="h-5 w-5" />
+                Batch Process
               </button>
             )}
           </div>
@@ -1147,9 +1236,28 @@ ${pageDetails.translation.data || "*No translation available*"}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden">
             <div className="flex items-center justify-between p-4 border-b border-gray-100">
               <h2 className="text-base font-semibold text-gray-900">Source</h2>
-              <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs font-medium rounded">
-                {pageDetails?.ocr.language || book?.language || "—"}
-              </span>
+              <div className="flex items-center gap-2">
+                {viewMode === "edit" && !isDemo && (
+                  <button
+                    onClick={handleSplitPage}
+                    disabled={splitting || !pageDetails}
+                    className="flex items-center gap-1 px-2 py-1 bg-amber-100 hover:bg-amber-200 disabled:bg-gray-100 disabled:cursor-not-allowed text-amber-700 disabled:text-gray-400 text-xs font-medium rounded transition-colors"
+                    title="Split page into left and right halves"
+                  >
+                    {splitting ? (
+                      <LoadingDots color="#b45309" />
+                    ) : (
+                      <>
+                        <ScissorsIcon className="h-3.5 w-3.5" />
+                        Split
+                      </>
+                    )}
+                  </button>
+                )}
+                <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs font-medium rounded">
+                  {pageDetails?.ocr.language || book?.language || "—"}
+                </span>
+              </div>
             </div>
             <div className="flex-1 relative bg-gray-50 flex items-center justify-center overflow-hidden min-h-[400px]">
               {imageLoading && (
@@ -1228,12 +1336,12 @@ ${pageDetails.translation.data || "*No translation available*"}
               </div>
 
               {/* OCR Content */}
-              <div className="flex-1 overflow-hidden p-4">
+              <div className="flex-1 p-4 min-h-0">
                 <textarea
-                  value={pageDetails?.ocr?.data || ""}
+                  value={stripImageLinks(pageDetails?.ocr?.data || "")}
                   onChange={(e) => handleOcrTextChange(e.target.value)}
                   placeholder="OCR text will appear here after running OCR..."
-                  className="w-full h-full p-3 border border-gray-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-purple-500 font-serif text-sm leading-relaxed"
+                  className="w-full h-full max-h-[calc(100vh-350px)] p-3 border border-gray-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-purple-500 font-serif text-sm leading-relaxed overflow-y-auto"
                 />
               </div>
             </div>
@@ -1319,7 +1427,7 @@ ${pageDetails.translation.data || "*No translation available*"}
             </div>
 
             {/* Translation Content */}
-            <div className="flex-1 overflow-hidden p-4">
+            <div className="flex-1 p-4 min-h-0">
               {viewMode === "read" ? (
                 <TextDisplay
                   content={pageDetails?.translation?.data || ""}
@@ -1327,10 +1435,10 @@ ${pageDetails.translation.data || "*No translation available*"}
                 />
               ) : (
                 <textarea
-                  value={pageDetails?.translation?.data || ""}
+                  value={stripImageLinks(pageDetails?.translation?.data || "")}
                   onChange={(e) => handleTranslationTextChange(e.target.value)}
                   placeholder="Translation will appear here after translating..."
-                  className="w-full h-full p-3 border border-gray-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-purple-500 font-serif text-sm leading-relaxed"
+                  className="w-full h-full max-h-[calc(100vh-350px)] p-3 border border-gray-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-purple-500 font-serif text-sm leading-relaxed overflow-y-auto"
                 />
               )}
             </div>
@@ -1339,45 +1447,41 @@ ${pageDetails.translation.data || "*No translation available*"}
       </main>
 
       {/* Settings Modals */}
-      <SettingsModal
-        isOpen={ocrSettingsOpen}
-        onClose={() => setOcrSettingsOpen(false)}
-        title="OCR Settings"
-        prompts={ocrPrompts}
-        selectedPromptId={selectedOcrPromptId}
-        onSelectPrompt={handleSelectOcrPrompt}
-        onAddPrompt={addOcrPrompt}
-        onDeletePrompt={deleteOcrPrompt}
-        onUpdatePrompt={updateOcrPrompt}
-        model={pageDetails?.ocr.model || "mistral"}
-        onModelChange={(model) =>
-          handlePageDetailsChange({ ocr: { ...pageDetails!.ocr, model } })
-        }
-        models={OCR_MODELS}
-        type="ocr"
-        currentPromptText={currentOcrPromptText}
-        onPromptTextChange={setCurrentOcrPromptText}
-      />
+      {renderSettingsModal(
+        ocrSettingsOpen,
+        () => setOcrSettingsOpen(false),
+        "OCR Settings",
+        ocrPrompts,
+        selectedOcrPromptId,
+        handleSelectOcrPrompt,
+        addOcrPrompt,
+        deleteOcrPrompt,
+        updateOcrPrompt,
+        pageDetails?.ocr.model || "mistral",
+        (model) => handlePageDetailsChange({ ocr: { ...pageDetails!.ocr, model } }),
+        OCR_MODELS,
+        "ocr",
+        currentOcrPromptText,
+        setCurrentOcrPromptText
+      )}
 
-      <SettingsModal
-        isOpen={translationSettingsOpen}
-        onClose={() => setTranslationSettingsOpen(false)}
-        title="Translation Settings"
-        prompts={translationPrompts}
-        selectedPromptId={selectedTranslationPromptId}
-        onSelectPrompt={handleSelectTranslationPrompt}
-        onAddPrompt={addTranslationPrompt}
-        onDeletePrompt={deleteTranslationPrompt}
-        onUpdatePrompt={updateTranslationPrompt}
-        model={pageDetails?.translation.model || "gemini"}
-        onModelChange={(model) =>
-          handlePageDetailsChange({ translation: { ...pageDetails!.translation, model } })
-        }
-        models={TRANSLATION_MODELS}
-        type="translation"
-        currentPromptText={currentTranslationPromptText}
-        onPromptTextChange={setCurrentTranslationPromptText}
-      />
+      {renderSettingsModal(
+        translationSettingsOpen,
+        () => setTranslationSettingsOpen(false),
+        "Translation Settings",
+        translationPrompts,
+        selectedTranslationPromptId,
+        handleSelectTranslationPrompt,
+        addTranslationPrompt,
+        deleteTranslationPrompt,
+        updateTranslationPrompt,
+        pageDetails?.translation.model || "gemini",
+        (model) => handlePageDetailsChange({ translation: { ...pageDetails!.translation, model } }),
+        TRANSLATION_MODELS,
+        "translation",
+        currentTranslationPromptText,
+        setCurrentTranslationPromptText
+      )}
 
       {/* Batch Processing Modal */}
       {batchModalOpen && (

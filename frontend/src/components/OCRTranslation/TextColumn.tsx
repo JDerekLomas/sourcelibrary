@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkBreaks from "remark-breaks";
 import { PencilIcon, PhotoIcon } from "@heroicons/react/24/solid";
 import ToggleSwitch from "./ToggleSwitch";
 import { RoleGuard, ResourceType, ActionType } from "../../auth/RoleGuard";
@@ -93,6 +94,7 @@ const TextColumn: React.FC<TextColumnProps> = ({
                     >
                         {data ? (
                             <ReactMarkdown
+                                remarkPlugins={[remarkBreaks]}
                                 components={{
                                     img: ({ node, ...props }) => (
                                         <img

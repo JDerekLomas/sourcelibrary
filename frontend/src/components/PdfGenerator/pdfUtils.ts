@@ -1,5 +1,6 @@
 import { pdf } from "@react-pdf/renderer";
 import PdfDownload from "./PdfDownload";
+import BilingualPdfDocument from "./BilingualPdfDownload";
 import { Book, Page } from "../../types";
 import React from "react";
 
@@ -122,6 +123,68 @@ export async function createAndDownloadPdf(
     showError(
       "PDF Generation Failed",
       `Failed to generate PDF: ${error instanceof Error ? error.message : "Unknown error"}`
+    );
+  }
+}
+
+// Creates a bilingual side-by-side PDF with OCR on left and translation on right
+export async function createAndDownloadBilingualPdf(
+  bookDetails: Book,
+  allPages: Page[],
+  showSuccess: (title: string, message: string) => void,
+  showError: (title: string, message: string) => void
+) {
+  try {
+    // Check if there are any pages at all
+    if (!allPages || allPages.length === 0) {
+      showError("No Pages", "This book has no pages to generate a PDF.");
+      return;
+    }
+
+    // Filter to pages with content (OCR or translation)
+    const pagesWithContent = allPages
+      .filter((page) => page.ocr?.data?.trim() || page.translation?.data?.trim())
+      .sort((a, b) => a.page_number - b.page_number);
+
+    // Check if there are any pages with content
+    if (pagesWithContent.length === 0) {
+      showError("No Content", "No pages with OCR or translation found for this book.");
+      return;
+    }
+
+    // Create PDF component
+    const pdfComponent = React.createElement(BilingualPdfDocument, {
+      bookDetails,
+      pages: allPages,
+    }) as React.ReactElement;
+
+    // Generate PDF blob
+    const blob = await pdf(pdfComponent).toBlob();
+
+    if (!blob) {
+      showError("PDF Generation Failed", "PDF blob generation failed.");
+      return;
+    }
+
+    const url = URL.createObjectURL(blob);
+
+    // Download PDF
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${bookDetails.title.replace(/[^a-zA-Z0-9]/g, "_")}_Bilingual.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    showSuccess(
+      "Bilingual PDF Generated",
+      `Bilingual PDF with ${pagesWithContent.length} pages has been downloaded successfully.`
+    );
+  } catch (error) {
+    showError(
+      "PDF Generation Failed",
+      `Failed to generate bilingual PDF: ${error instanceof Error ? error.message : "Unknown error"}`
     );
   }
 }

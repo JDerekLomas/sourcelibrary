@@ -28,7 +28,7 @@ import Button from "../components/ui/Buttons/Button";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import { Helmet } from "react-helmet";
 import HomeButton from "../components/ui/Buttons/HomeButton";
-import { createAndDownloadPdf } from "../components/PdfGenerator/pdfUtils";
+import { createAndDownloadPdf, createAndDownloadBilingualPdf } from "../components/PdfGenerator/pdfUtils";
 import ToggleSwitch from "../components/OCRTranslation/ToggleSwitch";
 import { RoleGuard, ResourceType, ActionType } from "../auth/RoleGuard";
 import { usePaths } from "../hooks/usePaths";
@@ -64,6 +64,7 @@ const BookDetails: React.FC = () => {
   const [batchModalVisible, setBatchModalVisible] = useState(false);
 
   const [pdfGenerating, setPdfGenerating] = useState(false);
+  const [bilingualPdfGenerating, setBilingualPdfGenerating] = useState(false);
   const [pdfProcessorVisible, setPdfProcessorVisible] = useState(false);
   const [pdfSplitProcessorVisible, setPdfSplitProcessorVisible] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -169,6 +170,23 @@ const BookDetails: React.FC = () => {
       );
     } finally {
       setPdfGenerating(false);
+    }
+  };
+
+  const handleDownloadBilingualPdf = async () => {
+    if (!bookDetails) return;
+
+    setBilingualPdfGenerating(true);
+
+    try {
+      await createAndDownloadBilingualPdf(
+        bookDetails,
+        allPages,
+        showSuccess,
+        showError
+      );
+    } finally {
+      setBilingualPdfGenerating(false);
     }
   };
 
@@ -663,6 +681,17 @@ const BookDetails: React.FC = () => {
                           </span>
                         </Button>
 
+                        <Button
+                          onClick={handleDownloadBilingualPdf}
+                          variant="primary"
+                          disabled={bilingualPdfGenerating}
+                        >
+                          <ArrowDownTrayIcon className="h-4 w-4 mr-2" />
+                          <span>
+                            {bilingualPdfGenerating ? "Generating..." : "Download Bilingual"}
+                          </span>
+                        </Button>
+
                         <RoleGuard resource={ResourceType.BOOK} action={ActionType.UPDATE}>
                           {/* Edit Button */}
                           <Button
@@ -728,6 +757,17 @@ const BookDetails: React.FC = () => {
                         <ArrowDownTrayIcon className="h-4 w-4 mr-2" />
                         <span>
                           {pdfGenerating ? "Generating..." : "Download Translation"}
+                        </span>
+                      </Button>
+
+                      <Button
+                        onClick={handleDownloadBilingualPdf}
+                        variant="primary"
+                        disabled={bilingualPdfGenerating}
+                      >
+                        <ArrowDownTrayIcon className="h-4 w-4 mr-2" />
+                        <span>
+                          {bilingualPdfGenerating ? "Generating..." : "Download Bilingual"}
                         </span>
                       </Button>
 
