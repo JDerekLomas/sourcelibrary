@@ -2,6 +2,8 @@ import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
+import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
 import { jsPDF } from "jspdf";
 import {
   PlayCircleIcon,
@@ -202,6 +204,29 @@ const BookTranslator: React.FC = () => {
     if (!text) return "";
     // Remove ![alt](url) patterns
     return text.replace(/!\[([^\]]*)\]\([^)]+\)/g, "");
+  }, []);
+
+  // Process [[notes: ...]] patterns into footnotes
+  const processNotesAsFootnotes = useCallback((text: string): { processedText: string; footnotes: string[] } => {
+    if (!text) return { processedText: "", footnotes: [] };
+
+    const footnotes: string[] = [];
+    let counter = 1;
+
+    // Match various note patterns: [[notes: ...]], [[note: ...]], [[?reading]], [[alt: ...]], [[margin: ...]], etc.
+    const notePattern = /\[\[([^\]]+)\]\]/g;
+
+    const processedText = text.replace(notePattern, (match, noteContent) => {
+      // Skip page references like [[page: 12]]
+      if (noteContent.toLowerCase().startsWith("page:")) {
+        return match; // Keep page references inline
+      }
+
+      footnotes.push(noteContent.trim());
+      return `<sup class="footnote-ref">[${counter++}]</sup>`;
+    });
+
+    return { processedText, footnotes };
   }, []);
 
   // Save prompts to localStorage
@@ -939,7 +964,7 @@ ${pageDetails.translation.data || "*No translation available*"}
     </div>
   );
 
-  // Text display component with markdown (strips image links)
+  // Text display component with markdown (strips image links, processes footnotes)
   const TextDisplay = ({
     content,
     placeholder
@@ -947,15 +972,17 @@ ${pageDetails.translation.data || "*No translation available*"}
     content: string;
     placeholder: string;
   }) => {
-    // Strip image links from content before rendering
+    // Strip image links and process footnotes
     const cleanContent = stripImageLinks(content);
+    const { processedText, footnotes } = processNotesAsFootnotes(cleanContent);
 
     return (
       <div className="h-full max-h-[calc(100vh-300px)] overflow-y-auto">
         {cleanContent ? (
           <div className="prose prose-sm max-w-none font-serif leading-relaxed">
             <ReactMarkdown
-              remarkPlugins={[remarkBreaks]}
+              remarkPlugins={[remarkBreaks, remarkGfm]}
+              rehypePlugins={[rehypeRaw]}
               components={{
                 // Skip rendering any images that might slip through
                 img: () => null,
@@ -968,10 +995,35 @@ ${pageDetails.translation.data || "*No translation available*"}
                 h2: ({ children }) => (
                   <h2 className="text-lg font-bold mb-2 text-gray-900">{children}</h2>
                 ),
+                table: ({ children }) => (
+                  <table className="min-w-full border-collapse border border-gray-300 my-4">{children}</table>
+                ),
+                th: ({ children }) => (
+                  <th className="border border-gray-300 px-3 py-2 bg-gray-100 font-semibold text-left">{children}</th>
+                ),
+                td: ({ children }) => (
+                  <td className="border border-gray-300 px-3 py-2">{children}</td>
+                ),
+                sup: ({ children, className }) => (
+                  <sup className={`text-purple-600 font-semibold cursor-help ${className || ""}`}>{children}</sup>
+                ),
               }}
             >
-              {cleanContent}
+              {processedText}
             </ReactMarkdown>
+            {/* Footnotes section */}
+            {footnotes.length > 0 && (
+              <div className="mt-6 pt-4 border-t border-gray-200">
+                <h4 className="text-sm font-semibold text-gray-600 mb-2">Notes</h4>
+                <ol className="text-xs text-gray-600 space-y-1 list-decimal list-inside">
+                  {footnotes.map((note, index) => (
+                    <li key={index} className="leading-relaxed">
+                      <span className="text-purple-600 font-semibold">[{index + 1}]</span> {note}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-gray-400">
@@ -1075,9 +1127,8 @@ ${pageDetails.translation.data || "*No translation available*"}
                 </span>
               </label>
               <textarea
-                defaultValue={currentPromptText}
-                key={selectedPromptId}
-                onBlur={(e) => onPromptTextChange(e.target.value)}
+                value={currentPromptText}
+                onChange={(e) => onPromptTextChange(e.target.value)}
                 rows={8}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 font-mono"
                 autoComplete="off"

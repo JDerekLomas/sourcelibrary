@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
+import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
 import { PencilIcon, PhotoIcon } from "@heroicons/react/24/solid";
 import ToggleSwitch from "./ToggleSwitch";
 import { RoleGuard, ResourceType, ActionType } from "../../auth/RoleGuard";
@@ -18,6 +20,26 @@ interface TextColumnProps {
     footer?: React.ReactNode;
 }
 
+// Process [[notes: ...]] patterns into footnotes
+const processNotesAsFootnotes = (text: string): { processedText: string; footnotes: string[] } => {
+    if (!text) return { processedText: "", footnotes: [] };
+
+    const footnotes: string[] = [];
+    let counter = 1;
+
+    const notePattern = /\[\[([^\]]+)\]\]/g;
+
+    const processedText = text.replace(notePattern, (match, noteContent) => {
+        if (noteContent.toLowerCase().startsWith("page:")) {
+            return match;
+        }
+        footnotes.push(noteContent.trim());
+        return `<sup class="footnote-ref">[${counter++}]</sup>`;
+    });
+
+    return { processedText, footnotes };
+};
+
 const TextColumn: React.FC<TextColumnProps> = ({
     title,
     language,
@@ -34,6 +56,8 @@ const TextColumn: React.FC<TextColumnProps> = ({
     const [forceEdit, setForceEdit] = useState(false);
 
     useEffect(() => { setForceEdit(!showMarkdown) }, [showMarkdown]);
+
+    const { processedText, footnotes } = useMemo(() => processNotesAsFootnotes(data), [data]);
 
     return (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-4 flex flex-col h-full">
@@ -93,8 +117,10 @@ const TextColumn: React.FC<TextColumnProps> = ({
                         }}
                     >
                         {data ? (
+                        <>
                             <ReactMarkdown
-                                remarkPlugins={[remarkBreaks]}
+                                remarkPlugins={[remarkBreaks, remarkGfm]}
+                                rehypePlugins={[rehypeRaw]}
                                 components={{
                                     img: ({ node, ...props }) => (
                                         <img
@@ -109,10 +135,35 @@ const TextColumn: React.FC<TextColumnProps> = ({
                                             }}
                                         />
                                     ),
+                                    table: ({ children }) => (
+                                        <table className="min-w-full border-collapse border border-gray-300 my-4">{children}</table>
+                                    ),
+                                    th: ({ children }) => (
+                                        <th className="border border-gray-300 px-3 py-2 bg-gray-100 font-semibold text-left">{children}</th>
+                                    ),
+                                    td: ({ children }) => (
+                                        <td className="border border-gray-300 px-3 py-2">{children}</td>
+                                    ),
+                                    sup: ({ children, className }) => (
+                                        <sup className={`text-purple-600 font-semibold cursor-help ${className || ""}`}>{children}</sup>
+                                    ),
                                 }}
                             >
-                                {data}
+                                {processedText}
                             </ReactMarkdown>
+                            {footnotes.length > 0 && (
+                                <div className="mt-4 pt-3 border-t border-gray-200">
+                                    <h4 className="text-xs font-semibold text-gray-500 mb-1">Notes</h4>
+                                    <ol className="text-xs text-gray-600 space-y-0.5">
+                                        {footnotes.map((note, index) => (
+                                            <li key={index}>
+                                                <span className="text-purple-600 font-semibold">[{index + 1}]</span> {note}
+                                            </li>
+                                        ))}
+                                    </ol>
+                                </div>
+                            )}
+                        </>
                         ) : (
                             <div className="text-gray-400">{title === "OCR Text" ? "OCR text will appear here..." : "Original text not translated yet..."}</div>
                         )}
