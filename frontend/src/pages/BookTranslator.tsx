@@ -893,29 +893,27 @@ ${pageDetails.translation.data || "*No translation available*"}
 
   const addOcrPrompt = () => {
     if (!newPromptName.trim()) return;
-    const defaultPrompt = "OCR the page in {language}. Return the transcribed text.";
+    // Save current edited text with the new name
     const newPrompt: PromptItem = {
       id: Date.now().toString(),
       name: newPromptName,
-      prompt: defaultPrompt,
+      prompt: currentOcrPromptText,
     };
     setOcrPrompts([...ocrPrompts, newPrompt]);
     setSelectedOcrPromptId(newPrompt.id);
-    setCurrentOcrPromptText(defaultPrompt);
     setNewPromptName("");
   };
 
   const addTranslationPrompt = () => {
     if (!newPromptName.trim()) return;
-    const defaultPrompt = "Translate from {source_lang} to {target_lang}.";
+    // Save current edited text with the new name
     const newPrompt: PromptItem = {
       id: Date.now().toString(),
       name: newPromptName,
-      prompt: defaultPrompt,
+      prompt: currentTranslationPromptText,
     };
     setTranslationPrompts([...translationPrompts, newPrompt]);
     setSelectedTranslationPromptId(newPrompt.id);
-    setCurrentTranslationPromptText(defaultPrompt);
     setNewPromptName("");
   };
 
