@@ -337,7 +337,11 @@ const BookTranslator: React.FC = () => {
 
   // OCR handler - uses currentOcrPromptText directly
   const runOCR = async () => {
-    if (!pageDetails) return;
+    console.log("runOCR called", { pageDetails, currentOcrPromptText });
+    if (!pageDetails) {
+      console.log("No pageDetails, returning");
+      return;
+    }
 
     setOcrApiRunning(true);
 
@@ -351,6 +355,13 @@ const BookTranslator: React.FC = () => {
     try {
       // Use the current prompt text, replacing placeholders
       const promptWithLanguage = currentOcrPromptText.replace("{language}", pageDetails.ocr.language);
+      console.log("OCR request:", {
+        pageId: pageDetails.id,
+        photoUrl: pageDetails.photo,
+        language: pageDetails.ocr.language,
+        aiModel: pageDetails.ocr.model || "mistral",
+        customPrompt: promptWithLanguage,
+      });
 
       const response = await apiService.performOCR({
         pageId: pageDetails.id,
@@ -361,13 +372,15 @@ const BookTranslator: React.FC = () => {
         autoSave: true,
       });
 
+      console.log("OCR response:", response);
       setPageDetails((prev) =>
         prev ? { ...prev, ocr: { ...prev.ocr, data: response.ocr } } : null
       );
       showSuccess("OCR completed successfully");
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error performing OCR:", error);
-      showModalError("OCR Failed", "Failed to perform OCR. Please try again.");
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      showModalError("OCR Failed", `Failed to perform OCR: ${errorMessage}`);
     } finally {
       setOcrApiRunning(false);
     }
@@ -891,31 +904,41 @@ ${pageDetails.translation.data || "*No translation available*"}
     }
   };
 
-  const addOcrPrompt = () => {
-    if (!newPromptName.trim()) return;
+  const addOcrPrompt = useCallback(() => {
+    console.log("addOcrPrompt called", { newPromptName, currentOcrPromptText });
+    if (!newPromptName.trim()) {
+      console.log("Name is empty, returning");
+      return;
+    }
     // Save current edited text with the new name
     const newPrompt: PromptItem = {
       id: Date.now().toString(),
-      name: newPromptName,
+      name: newPromptName.trim(),
       prompt: currentOcrPromptText,
     };
-    setOcrPrompts([...ocrPrompts, newPrompt]);
+    console.log("Creating new prompt:", newPrompt);
+    setOcrPrompts(prev => [...prev, newPrompt]);
     setSelectedOcrPromptId(newPrompt.id);
     setNewPromptName("");
-  };
+  }, [newPromptName, currentOcrPromptText]);
 
-  const addTranslationPrompt = () => {
-    if (!newPromptName.trim()) return;
+  const addTranslationPrompt = useCallback(() => {
+    console.log("addTranslationPrompt called", { newPromptName, currentTranslationPromptText });
+    if (!newPromptName.trim()) {
+      console.log("Name is empty, returning");
+      return;
+    }
     // Save current edited text with the new name
     const newPrompt: PromptItem = {
       id: Date.now().toString(),
-      name: newPromptName,
+      name: newPromptName.trim(),
       prompt: currentTranslationPromptText,
     };
-    setTranslationPrompts([...translationPrompts, newPrompt]);
+    console.log("Creating new prompt:", newPrompt);
+    setTranslationPrompts(prev => [...prev, newPrompt]);
     setSelectedTranslationPromptId(newPrompt.id);
     setNewPromptName("");
-  };
+  }, [newPromptName, currentTranslationPromptText]);
 
   const updateOcrPrompt = (id: string, newPromptText: string) => {
     setOcrPrompts(ocrPrompts.map((p) =>
